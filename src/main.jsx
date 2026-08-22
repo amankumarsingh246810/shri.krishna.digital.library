@@ -90,7 +90,7 @@ function App() {
                 <button className="primary-btn" onClick={() => scrollTo("facilities")}>
                   Explore Facilities <ArrowRight size={18} />
                 </button>
-                <a className="secondary-btn" href="tel:8899776655">
+                <a className="secondary-btn" href="tel:9161072919">
                   <Phone size={18} /> Contact Operator
                 </a>
               </div>
