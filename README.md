@@ -28,13 +28,6 @@ Whether students are preparing for competitive examinations, attending online cl
 
 * 📚 **Modern Landing Page**
 * 📱 **Responsive Design**
-* 📶 **Free Wi-Fi**
-* ❄️ **Fully Air Conditioned**
-* 📰 **Daily English & Hindi Newspapers**
-* 📖 **Competitive Magazines**
-* 💧 **RO Drinking Water**
-* 🕐 **Open 24 Hours / 7 Days**
-* 🎓 **Student-Focused Study Environment**
 * 📞 **Direct Call to Library Operator**
 * 🧭 **Smooth Navigation Between Sections**
 * 📱 **Mobile-Friendly Navigation Menu**
@@ -240,17 +233,6 @@ The main goals of this project are:
 > **“Dreams don't work unless you do. Give your goals a place, give them your time.”**
 
 The website is designed around the idea that a dedicated study environment can help students stay focused and consistent with their preparation.
-
----
-
-## 📞 Contact
-
-**Shri Krishna Digital Library**
-📍 Musaila Chauraha, Deoria
-
-📞 **Library Operator:** 9161072919
-
-> Contact the library operator for information about the library and its facilities.
 
 ---
 
