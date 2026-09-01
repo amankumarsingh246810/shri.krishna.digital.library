@@ -12,7 +12,7 @@ The website provides information about the library's facilities, 24×7 availabil
 
 🔗 **[Visit Shri Krishna Digital Library](https://amankumarsingh246810.github.io/shri.krishna.digital.library/)**
 
----
+--- 
 
 ## 📌 About the Project
 
@@ -22,7 +22,7 @@ The website focuses on a clean, professional and responsive user experience and 
 
 Whether students are preparing for competitive examinations, attending online classes or looking for a distraction-free study environment, the website communicates the library's key facilities in a simple and engaging way.
 
----
+--- 
 
 ## ✨ Features
 
@@ -282,4 +282,4 @@ Your support and feedback are appreciated!
 
 This project is intended for educational and demonstration purposes.
 
-© 2026 Shri Krishna Digital Library. All rights reserved.
+© 2026 Shri Krishna Digital Library. All rights reserved. 
