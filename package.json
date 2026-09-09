@@ -1,22 +1,10 @@
 {
   "name": "shri-krishna-digital-library",
   "private": true,
-  "version": "1.0.0",
-  "type": "module",
+  "version": "2.0.0",
   "scripts": {
-  "dev": "vite",
-  "build": "vite build",
-  "predeploy": "npm run build",
-  "deploy": "gh-pages -d dist"
-  },
-  "dependencies": {
-    "@vitejs/plugin-react": "^4.3.1",
-    "lucide-react": "^0.468.0",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1",
-    "vite": "^5.4.10"
-  },
-  "devDependencies": {
-    "gh-pages": "^6.3.0"
+    "client": "npm --prefix client run dev",
+    "server": "npm --prefix server run dev",
+    "build": "npm --prefix client run build"
   }
 }
