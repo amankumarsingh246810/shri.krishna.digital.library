@@ -894,7 +894,6 @@ https://github.com/amankumarsingh246810/shri.krishna.digital.library
 
 This project is developed for **Shri Krishna Digital Library**.
 
-Add an explicit open-source license such as MIT only if you intend to make the project available under those terms.
 
 ---
 
