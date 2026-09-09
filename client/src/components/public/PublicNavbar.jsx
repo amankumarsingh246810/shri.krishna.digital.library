@@ -118,12 +118,12 @@ export default function PublicNavbar() {
           )}
 
           <a
-            href="tel:8899776655"
+            href="tel:7348095693"
             className="navigation-phone"
           >
             <Phone size={15} />
             <span>
-              8899776655
+              7348095693
             </span>
           </a>
 
@@ -190,7 +190,7 @@ export default function PublicNavbar() {
             )}
 
             <a
-              href="tel:8899776655"
+              href="tel:7348095693"
               className="mobile-phone-link"
             >
               <Phone size={17} />

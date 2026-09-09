@@ -156,10 +156,10 @@ export default function PublicFooter() {
               Contact
             </h3>
 
-            <a href="tel:8899776655">
+            <a href="tel:7348095693">
               <Phone size={16} />
 
-              8899776655
+              7348095693
             </a>
 
             <button

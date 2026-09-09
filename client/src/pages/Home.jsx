@@ -602,7 +602,7 @@ export default function Home() {
                 </Link>
 
                 <a
-                  href="tel:8899776655"
+                  href="tel:7348095693"
                   className="cta-secondary-button"
                 >
                   <Phone size={17} />
@@ -654,7 +654,7 @@ export default function Home() {
             </div>
 
             <a
-              href="tel:8899776655"
+              href="tel:7348095693"
               className="contact-card"
             >
               <div className="contact-card-icon">
@@ -667,7 +667,7 @@ export default function Home() {
                 </span>
 
                 <strong>
-                  8899776655
+                  7348095693
                 </strong>
 
                 <small>
