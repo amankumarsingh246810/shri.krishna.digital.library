@@ -76,17 +76,116 @@ The project currently uses React 18.3.1, Vite 5.4.x and Lucide React for its ico
 ```text
 shri.krishna.digital.library/
 │
-├── src/
-│   ├── main.jsx
-│   └── styles.css
+├── client/                              # React frontend application
+│   │
+│   ├── public/
+│   │   └── firebase-messaging-sw.js     # Firebase Cloud Messaging service worker
+│   │
+│   ├── src/
+│   │   │
+│   │   ├── components/
+│   │   │   ├── auth/
+│   │   │   │   └── AuthShell.jsx        # Shared authentication layout
+│   │   │   │
+│   │   │   ├── public/                 # Reusable public-facing components
+│   │   │   │
+│   │   │   └── StudentProtectedRoute.jsx
+│   │   │                               # Protects authenticated student routes
+│   │   │
+│   │   ├── pages/
+│   │   │   │
+│   │   │   ├── admin/
+│   │   │   │   ├── AdminDashboard.jsx
+│   │   │   │   ├── AdminLogin.jsx
+│   │   │   │   ├── FeeManagement.jsx
+│   │   │   │   ├── Notifications.jsx
+│   │   │   │   ├── PaymentHistory.jsx
+│   │   │   │   └── StudentManagement.jsx
+│   │   │   │
+│   │   │   ├── student/
+│   │   │   │   ├── StudentDashboard.jsx
+│   │   │   │   └── StudentLogin.jsx
+│   │   │   │
+│   │   │   └── Home.jsx                 # Public landing page
+│   │   │
+│   │   ├── services/
+│   │   │   ├── api.js                   # Axios/API configuration
+│   │   │   ├── firebase.js              # Firebase client configuration
+│   │   │   └── notification.js          # Notification/FCM utilities
+│   │   │
+│   │   ├── styles/
+│   │   │   └── auth.css                 # Authentication-specific styles
+│   │   │
+│   │   ├── main.jsx                     # React application entry point
+│   │   └── styles.css                   # Global application styles
+│   │
+│   ├── .env.example                     # Frontend environment template
+│   ├── index.html                       # HTML entry point
+│   ├── package.json                     # Frontend dependencies/scripts
+│   ├── package-lock.json
+│   └── vite.config.js                   # Vite configuration
 │
-├── .gitignore
-├── eslint.config.js
-├── index.html
-├── package.json
+│
+├── server/                              # Node.js + Express backend
+│   │
+│   ├── config/
+│   │   ├── db.js                         # MongoDB/Mongoose connection
+│   │   └── firebaseAdmin.js              # Firebase Admin SDK configuration
+│   │
+│   ├── controllers/
+│   │   ├── authController.js              # Admin authentication logic
+│   │   ├── notificationController.js      # Notification operations
+│   │   ├── paymentAuditController.js      # Payment audit operations
+│   │   ├── paymentController.js           # Payment management
+│   │   ├── studentAuthController.js       # Student authentication
+│   │   └── studentController.js            # Student management
+│   │
+│   ├── jobs/
+│   │   └── feeReminderJob.js              # Automated fee reminder job
+│   │
+│   ├── middleware/
+│   │   ├── adminMiddleware.js             # Admin authorization
+│   │   ├── authMiddleware.js              # Authentication middleware
+│   │   └── studentAuthMiddleware.js       # Student authentication middleware
+│   │
+│   ├── models/
+│   │   ├── Admin.js                       # Admin schema/model
+│   │   ├── Notification.js                # Notification schema/model
+│   │   ├── Payment.js                     # Payment schema/model
+│   │   ├── PaymentAudit.js                # Payment audit schema/model
+│   │   └── Student.js                     # Student schema/model
+│   │
+│   ├── routes/
+│   │   ├── authRoutes.js                  # Admin authentication routes
+│   │   ├── dashboardRoutes.js             # Dashboard routes
+│   │   ├── notificationRoutes.js          # Notification routes
+│   │   ├── paymentAuditRoutes.js          # Payment audit routes
+│   │   ├── paymentRoutes.js               # Payment routes
+│   │   ├── studentAuthRoutes.js           # Student authentication routes
+│   │   └── studentRoutes.js               # Student management routes
+│   │
+│   ├── services/
+│   │   └── notificationService.js         # Notification service layer
+│   │
+│   ├── utils/
+│   │   ├── createAdmin.js                 # Admin account creation utility
+│   │   ├── jwt.js                         # JWT utilities
+│   │   └── password.js                    # Password hashing/verification
+│   │
+│   ├── .env.example                       # Backend environment template
+│   ├── app.js                             # Express application configuration
+│   ├── server.js                          # Backend server entry point
+│   ├── package.json
+│   └── package-lock.json
+│
+│
+├── .gitignore                             # Git ignored files/secrets
+├── IMPLEMENTATION_PLAN.md                 # Development implementation plan
+├── README.md                              # Project documentation
+├── eslint.config.js                       # ESLint configuration
+├── package.json                            # Root project configuration
 ├── package-lock.json
-├── vite.config.js
-└── README.md
+└── vite.config.js                         # Root Vite configuration
 ```
 
 ### Important Files
@@ -241,18 +340,12 @@ The website is designed around the idea that a dedicated study environment can h
 Potential future enhancements include:
 
 * 📍 Google Maps integration
-* 📝 Online membership registration
 * 💳 Online membership/payment system
 * 🪑 Seat availability tracking
-* 👤 Student login and registration
-* 📅 Seat reservation system
-* 📢 Notices and announcements
 * 📰 Digital newspaper section
 * 📚 Online study-material section
 * 🌙 Dark mode
 * 🌐 Hindi/English language switcher
-* 📊 Admin dashboard
-* 🔔 Student notifications
 
 ---
 
