@@ -1,10 +1,9 @@
-import {
-  Router
-} from "express";
+import { Router } from "express";
 
 import {
   getNotifications,
-  sendManualNotification
+  getNotificationStats,
+  sendNotification
 } from "../controllers/notificationController.js";
 
 import {
@@ -15,36 +14,30 @@ import {
   adminOnly
 } from "../middleware/adminMiddleware.js";
 
-const router =
-  Router();
+const router = Router();
 
 /*
- * All notification management
- * endpoints require admin authentication.
+ * Every notification operation is
+ * restricted to authenticated admins.
  */
 router.use(
   protect,
   adminOnly
 );
 
-/*
- * GET /api/notifications
- *
- * Get notification history.
- */
 router.get(
   "/",
   getNotifications
 );
 
-/*
- * POST /api/notifications/send
- *
- * Send manual notification.
- */
+router.get(
+  "/stats",
+  getNotificationStats
+);
+
 router.post(
   "/send",
-  sendManualNotification
+  sendNotification
 );
 
 export default router;

@@ -1,3 +1,5 @@
+import { Link, useNavigate } from "react-router-dom";
+
 import {
   IndianRupee,
   Users,
@@ -6,7 +8,7 @@ import {
   History,
   LogOut
 } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+// import { useNavigate } from "react-router-dom";
 
 export default function AdminDashboard() {
   const navigate = useNavigate();
@@ -169,7 +171,37 @@ export default function AdminDashboard() {
           </button>
 
           {/* Notifications */}
-          <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+          <Link
+            to="/admin/notifications"
+            className="group block rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition-all duration-200 hover:-translate-y-1 hover:border-orange-200 hover:shadow-lg"
+          >
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-orange-50 text-orange-600 transition group-hover:bg-orange-600 group-hover:text-white">
+                <Bell className="h-6 w-6" />
+              </div>
+
+              <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
+                Available
+              </span>
+            </div>
+
+            <h3 className="mt-5 text-lg font-bold text-slate-900">
+              Notifications
+            </h3>
+
+            <p className="mt-2 text-sm leading-6 text-slate-500">
+              Send fee reminders and important library
+              announcements directly to students.
+            </p>
+
+            <div className="mt-5 flex items-center gap-2 text-sm font-bold text-orange-600">
+              Open Notifications
+              <span className="transition-transform group-hover:translate-x-1">
+                →
+              </span>
+            </div>
+          </Link>
+          {/* <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
             <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-orange-100 text-orange-700">
               <Bell size={24} />
             </div>
@@ -186,7 +218,7 @@ export default function AdminDashboard() {
             <span className="mt-4 inline-block rounded-full bg-orange-100 px-3 py-1 text-xs font-semibold text-orange-700">
               Coming Next
             </span>
-          </div>
+          </div> */}
 
           {/* Manual Payments */}
           <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">

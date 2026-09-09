@@ -1,61 +1,54 @@
-import {
-  getMessaging
-} from "firebase-admin/messaging";
+import { getMessaging } from "firebase-admin/messaging";
 
+import firebaseAdminApp from "../config/firebaseAdmin.js";
 import Notification from "../models/Notification.js";
 import Student from "../models/Student.js";
 
-export async function sendPushNotification({
-  studentId,
+const messaging = getMessaging(firebaseAdminApp);
+
+const INVALID_TOKEN_CODES = new Set([
+  "messaging/invalid-registration-token",
+  "messaging/registration-token-not-registered"
+]);
+
+function buildLink() {
+  const baseUrl = (
+    process.env.CLIENT_URL ||
+    "http://localhost:5173"
+  ).replace(/\/$/, "");
+
+  return `${baseUrl}/student/dashboard`;
+}
+
+function isInvalidTokenError(error) {
+  return INVALID_TOKEN_CODES.has(error?.code);
+}
+
+export async function sendNotificationToStudent({
+  student,
+  type,
   title,
   message,
-  type = "announcement",
   month,
   year
 }) {
-  const student =
-    await Student.findById(
-      studentId
-    );
+  const notification = await Notification.create({
+    studentId: student._id,
+    type,
+    month,
+    year,
+    channel: "push",
+    title,
+    message,
+    status: "queued"
+  });
 
-  if (!student) {
-    throw new Error(
-      "Student not found"
-    );
-  }
-
-  const tokens =
-    Array.isArray(
-      student.fcmTokens
-    )
-      ? student.fcmTokens.filter(
-          Boolean
-        )
-      : [];
-
-  const notification =
-    await Notification.create({
-      studentId:
-        student._id,
-
-      type,
-
-      month,
-
-      year,
-
-      channel: "push",
-
-      title,
-
-      message,
-
-      status: "queued"
-    });
+  const tokens = [
+    ...(student.fcmTokens || [])
+  ].filter(Boolean);
 
   if (tokens.length === 0) {
-    notification.status =
-      "failed";
+    notification.status = "failed";
 
     notification.error =
       "Student has no registered notification device.";
@@ -63,18 +56,37 @@ export async function sendPushNotification({
     await notification.save();
 
     return {
-      success: false,
       notification,
+      success: false,
       sentCount: 0,
-      failedCount: 0
+      failedCount: 0,
+      reason: notification.error
     };
   }
 
+  const invalidTokens = [];
+
+  let sentCount = 0;
+  let failedCount = 0;
+
   try {
-    const response =
-      await getMessaging().sendEachForMulticast(
-        {
-          tokens,
+    /*
+     * FCM supports up to 500 targets per
+     * multicast request.
+     */
+    for (
+      let start = 0;
+      start < tokens.length;
+      start += 500
+    ) {
+      const tokenChunk = tokens.slice(
+        start,
+        start + 500
+      );
+
+      const response =
+        await messaging.sendEachForMulticast({
+          tokens: tokenChunk,
 
           notification: {
             title,
@@ -83,59 +95,61 @@ export async function sendPushNotification({
 
           data: {
             type,
+            notificationId:
+              notification._id.toString(),
+
             studentId:
               student._id.toString(),
 
-            month:
-              month
-                ? String(month)
-                : "",
+            ...(month
+              ? {
+                  month: String(month)
+                }
+              : {}),
 
-            year:
-              year
-                ? String(year)
-                : ""
+            ...(year
+              ? {
+                  year: String(year)
+                }
+              : {})
           },
 
           webpush: {
             fcmOptions: {
-              link:
-                "/student/dashboard"
+              link: buildLink()
+            },
+
+            notification: {
+              title,
+              body: message,
+              icon: "/favicon.ico"
             }
           }
-        }
-      );
+        });
 
-    const invalidTokens = [];
+      sentCount += response.successCount;
+      failedCount += response.failureCount;
 
-    response.responses.forEach(
-      (
-        result,
-        index
-      ) => {
-        if (
-          !result.success
-        ) {
-          const errorCode =
-            result.error?.code;
-
+      response.responses.forEach(
+        (result, index) => {
           if (
-            errorCode ===
-              "messaging/registration-token-not-registered" ||
-            errorCode ===
-              "messaging/invalid-registration-token"
+            !result.success &&
+            isInvalidTokenError(
+              result.error
+            )
           ) {
             invalidTokens.push(
-              tokens[index]
+              tokenChunk[index]
             );
           }
         }
-      }
-    );
+      );
+    }
 
-    if (
-      invalidTokens.length > 0
-    ) {
+    /*
+     * Remove expired/invalid FCM tokens.
+     */
+    if (invalidTokens.length > 0) {
       await Student.findByIdAndUpdate(
         student._id,
         {
@@ -148,12 +162,6 @@ export async function sendPushNotification({
       );
     }
 
-    const sentCount =
-      response.successCount;
-
-    const failedCount =
-      response.failureCount;
-
     notification.status =
       sentCount > 0
         ? "sent"
@@ -164,85 +172,79 @@ export async function sendPushNotification({
         ? new Date()
         : undefined;
 
-    if (
-      failedCount > 0
-    ) {
+    if (sentCount === 0) {
       notification.error =
-        `${failedCount} notification(s) failed.`;
+        "FCM could not deliver the notification to any registered device.";
     }
 
     await notification.save();
 
     return {
-      success:
-        sentCount > 0,
-
       notification,
-
+      success: sentCount > 0,
       sentCount,
-
       failedCount
     };
   } catch (error) {
-    notification.status =
-      "failed";
+    console.error(
+      `FCM send failed for student ${student._id}:`,
+      error
+    );
+
+    notification.status = "failed";
 
     notification.error =
-      error.message;
+      error?.message ||
+      "Failed to send push notification";
 
     await notification.save();
 
-    throw error;
+    return {
+      notification,
+      success: false,
+      sentCount,
+      failedCount,
+      reason: notification.error
+    };
   }
 }
 
-export async function sendPushNotificationToMany({
+export async function sendNotificationToStudents({
   students,
+  type,
   title,
   message,
-  type = "announcement",
   month,
   year
 }) {
   const results = [];
 
-  for (
-    const student of students
-  ) {
-    try {
-      const result =
-        await sendPushNotification({
-          studentId:
-            student._id,
-
-          title,
-
-          message,
-
-          type,
-
-          month,
-
-          year
-        });
-
-      results.push({
-        studentId:
-          student._id,
-
-        ...result
+  for (const student of students) {
+    const result =
+      await sendNotificationToStudent({
+        student,
+        type,
+        title,
+        message,
+        month,
+        year
       });
-    } catch (error) {
-      results.push({
-        studentId:
-          student._id,
 
-        success: false,
+    results.push({
+      studentId: student._id,
+      studentName: student.name,
 
-        error:
-          error.message
-      });
-    }
+      success: result.success,
+
+      sentCount:
+        result.sentCount,
+
+      failedCount:
+        result.failedCount,
+
+      reason:
+        result.reason || null
+    });
   }
 
   return results;

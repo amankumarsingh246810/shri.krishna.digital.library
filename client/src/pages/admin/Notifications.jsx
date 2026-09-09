@@ -1,26 +1,116 @@
-import {
-  useEffect,
-  useMemo,
-  useState
-} from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import {
   Bell,
   BellRing,
   CheckCircle2,
+  ChevronDown,
+  CircleAlert,
   Clock3,
-  Loader2,
-  AlertCircle,
-  Send,
-  Users,
+  Megaphone,
   RefreshCw,
   Search,
-  XCircle
+  Send,
+  Users,
+  UserCheck,
+  UserRound,
+  WalletCards
 } from "lucide-react";
 
 import api from "../../services/api";
 
-function Notifications() {
+const MONTHS = [
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December"
+];
+
+const CURRENT_DATE =
+  new Date();
+
+const CURRENT_MONTH =
+  CURRENT_DATE.getMonth() + 1;
+
+const CURRENT_YEAR =
+  CURRENT_DATE.getFullYear();
+
+const AUDIENCES = [
+  {
+    id: "all_active",
+    title: "All active students",
+    description:
+      "Send to every currently enrolled student.",
+    icon: Users
+  },
+
+  {
+    id: "unpaid",
+    title: "Students with unpaid fees",
+    description:
+      "Target active students who have not paid the selected month.",
+    icon: WalletCards
+  },
+
+  {
+    id: "selected",
+    title: "Select students",
+    description:
+      "Choose specific students from the active student list.",
+    icon: UserCheck
+  }
+];
+
+function getDefaultTitle(type) {
+  return type === "fee_reminder"
+    ? "Monthly fee reminder"
+    : "Library announcement";
+}
+
+function getDefaultMessage(type) {
+  return type === "fee_reminder"
+    ? "Your monthly library fee is pending. Please contact the library operator to complete your payment."
+    : "We have an important announcement from Shri Krishna Digital Library.";
+}
+
+function formatDate(value) {
+  if (!value) {
+    return "—";
+  }
+
+  return new Date(
+    value
+  ).toLocaleDateString(
+    "en-IN",
+    {
+      day: "2-digit",
+      month: "short",
+      year: "numeric"
+    }
+  );
+}
+
+function getStatusClasses(status) {
+  if (status === "sent") {
+    return "bg-emerald-50 text-emerald-700 ring-emerald-200";
+  }
+
+  if (status === "failed") {
+    return "bg-red-50 text-red-700 ring-red-200";
+  }
+
+  return "bg-amber-50 text-amber-700 ring-amber-200";
+}
+
+export default function Notifications() {
   const [students, setStudents] =
     useState([]);
 
@@ -29,24 +119,51 @@ function Notifications() {
     setNotifications
   ] = useState([]);
 
+  const [stats, setStats] =
+    useState({
+      total: 0,
+      sent: 0,
+      failed: 0,
+      queued: 0
+    });
+
+  const [audience, setAudience] =
+    useState("all_active");
+
+  const [type, setType] =
+    useState("fee_reminder");
+
   const [
     selectedStudentIds,
     setSelectedStudentIds
   ] = useState([]);
 
+  const [
+    studentSearch,
+    setStudentSearch
+  ] = useState("");
+
+  const [month, setMonth] =
+    useState(CURRENT_MONTH);
+
+  const [year, setYear] =
+    useState(CURRENT_YEAR);
+
   const [title, setTitle] =
-    useState("");
+    useState(
+      getDefaultTitle(
+        "fee_reminder"
+      )
+    );
 
   const [message, setMessage] =
-    useState("");
+    useState(
+      getDefaultMessage(
+        "fee_reminder"
+      )
+    );
 
-  const [search, setSearch] =
-    useState("");
-
-  const [loadingStudents, setLoadingStudents] =
-    useState(true);
-
-  const [loadingNotifications, setLoadingNotifications] =
+  const [loading, setLoading] =
     useState(true);
 
   const [sending, setSending] =
@@ -55,297 +172,224 @@ function Notifications() {
   const [refreshing, setRefreshing] =
     useState(false);
 
-  const [success, setSuccess] =
-    useState("");
-
   const [error, setError] =
     useState("");
 
-  /*
-   * ------------------------------------------
-   * Load students
-   * ------------------------------------------
-   */
-  async function loadStudents() {
+  const [success, setSuccess] =
+    useState("");
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  useEffect(() => {
+    setTitle(
+      getDefaultTitle(type)
+    );
+
+    setMessage(
+      getDefaultMessage(type)
+    );
+  }, [type]);
+
+  async function loadData(
+    showRefreshState = false
+  ) {
     try {
-      setLoadingStudents(true);
-
-      const response =
-        await api.get(
-          "/students"
-        );
-
-      if (
-        !response.data.success
-      ) {
-        throw new Error(
-          "Failed to load students"
-        );
+      if (showRefreshState) {
+        setRefreshing(true);
+      } else {
+        setLoading(true);
       }
 
-      const activeStudents =
-        response.data.students.filter(
+      setError("");
+
+      const [
+        studentsResponse,
+        notificationsResponse,
+        statsResponse
+      ] = await Promise.all([
+        api.get("/students"),
+
+        api.get(
+          "/notifications?limit=50"
+        ),
+
+        api.get(
+          "/notifications/stats"
+        )
+      ]);
+
+      setStudents(
+        studentsResponse.data
+          .students || []
+      );
+
+      setNotifications(
+        notificationsResponse.data
+          .notifications || []
+      );
+
+      setStats(
+        statsResponse.data.stats || {
+          total: 0,
+          sent: 0,
+          failed: 0,
+          queued: 0
+        }
+      );
+    } catch (requestError) {
+      console.error(
+        "Notifications page load error:",
+        requestError
+      );
+
+      setError(
+        requestError.response?.data
+          ?.message ||
+          requestError.message ||
+          "Unable to load notifications."
+      );
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }
+
+  const activeStudents =
+    useMemo(
+      () =>
+        students.filter(
           (student) =>
             student.enrollmentStatus ===
             "active"
-        );
+        ),
+      [students]
+    );
 
-      setStudents(
-        activeStudents
-      );
-    } catch (error) {
-      console.error(
-        "Load students error:",
-        error
-      );
-
-      setError(
-        error.response?.data?.message ||
-          "Failed to load students"
-      );
-    } finally {
-      setLoadingStudents(
-        false
-      );
-    }
-  }
-
-  /*
-   * ------------------------------------------
-   * Load notification history
-   * ------------------------------------------
-   */
-  async function loadNotifications() {
-    try {
-      setLoadingNotifications(
-        true
-      );
-
-      const response =
-        await api.get(
-          "/notifications"
-        );
-
-      if (
-        !response.data.success
-      ) {
-        throw new Error(
-          "Failed to load notifications"
-        );
-      }
-
-      setNotifications(
-        response.data.notifications
-      );
-    } catch (error) {
-      console.error(
-        "Load notifications error:",
-        error
-      );
-
-      setError(
-        error.response?.data?.message ||
-          "Failed to load notification history"
-      );
-    } finally {
-      setLoadingNotifications(
-        false
-      );
-    }
-  }
-
-  /*
-   * ------------------------------------------
-   * Initial load
-   * ------------------------------------------
-   */
-  useEffect(() => {
-    loadStudents();
-    loadNotifications();
-  }, []);
-
-  /*
-   * ------------------------------------------
-   * Filter students
-   * ------------------------------------------
-   */
   const filteredStudents =
     useMemo(() => {
-      const searchTerm =
-        search
+      const query =
+        studentSearch
           .trim()
           .toLowerCase();
 
-      if (!searchTerm) {
-        return students;
+      if (!query) {
+        return activeStudents;
       }
 
-      return students.filter(
-        (student) =>
-          student.name
-            ?.toLowerCase()
-            .includes(
-              searchTerm
-            ) ||
-          student.phoneNumber
-            ?.toLowerCase()
-            .includes(
-              searchTerm
-            ) ||
-          student.fatherName
-            ?.toLowerCase()
-            .includes(
-              searchTerm
-            ) ||
-          student.seatNumber
-            ?.toLowerCase()
-            .includes(
-              searchTerm
-            )
+      return activeStudents.filter(
+        (student) => {
+          const searchableText = [
+            student.name,
+            student.phoneNumber,
+            student.seatNumber
+          ]
+            .filter(Boolean)
+            .join(" ")
+            .toLowerCase();
+
+          return searchableText.includes(
+            query
+          );
+        }
       );
     }, [
-      students,
-      search
+      activeStudents,
+      studentSearch
     ]);
 
-  /*
-   * ------------------------------------------
-   * Toggle student
-   * ------------------------------------------
-   */
+  const selectedStudents =
+    useMemo(
+      () =>
+        activeStudents.filter(
+          (student) =>
+            selectedStudentIds.includes(
+              student._id
+            )
+        ),
+      [
+        activeStudents,
+        selectedStudentIds
+      ]
+    );
+
+  const yearOptions =
+    useMemo(() => {
+      return Array.from(
+        { length: 5 },
+        (_, index) =>
+          CURRENT_YEAR - index
+      );
+    }, []);
+
   function toggleStudent(
     studentId
   ) {
     setSelectedStudentIds(
-      (current) => {
-        if (
-          current.includes(
-            studentId
-          )
-        ) {
-          return current.filter(
-            (id) =>
-              id !== studentId
-          );
-        }
-
-        return [
-          ...current,
-          studentId
-        ];
-      }
+      (current) =>
+        current.includes(studentId)
+          ? current.filter(
+              (id) =>
+                id !== studentId
+            )
+          : [
+              ...current,
+              studentId
+            ]
     );
   }
 
-  /*
-   * ------------------------------------------
-   * Select all filtered students
-   * ------------------------------------------
-   */
-  function toggleSelectAll() {
-    const filteredIds =
+  function selectAllVisible() {
+    const visibleIds =
       filteredStudents.map(
         (student) =>
           student._id
       );
 
-    const allSelected =
-      filteredIds.length > 0 &&
-      filteredIds.every(
-        (id) =>
-          selectedStudentIds.includes(
-            id
-          )
-      );
-
-    if (allSelected) {
-      setSelectedStudentIds(
-        (current) =>
-          current.filter(
-            (id) =>
-              !filteredIds.includes(
-                id
-              )
-          )
-      );
-    } else {
-      setSelectedStudentIds(
-        (current) => [
-          ...new Set([
-            ...current,
-            ...filteredIds
-          ])
-        ]
-      );
-    }
-  }
-
-  /*
-   * ------------------------------------------
-   * Select all active students
-   * ------------------------------------------
-   */
-  function selectAllStudents() {
     setSelectedStudentIds(
-      students.map(
-        (student) =>
-          student._id
-      )
+      (current) => [
+        ...new Set([
+          ...current,
+          ...visibleIds
+        ])
+      ]
     );
   }
 
-  /*
-   * ------------------------------------------
-   * Clear selection
-   * ------------------------------------------
-   */
-  function clearSelection() {
-    setSelectedStudentIds(
-      []
-    );
+  function clearSelected() {
+    setSelectedStudentIds([]);
   }
 
-  /*
-   * ------------------------------------------
-   * Send notification
-   * ------------------------------------------
-   */
-  async function handleSendNotification(
+  async function handleSend(
     event
   ) {
     event.preventDefault();
 
-    setSuccess("");
     setError("");
+    setSuccess("");
 
-    if (
-      !title.trim()
-    ) {
+    if (!title.trim()) {
       setError(
         "Please enter a notification title."
       );
-
       return;
     }
 
-    if (
-      !message.trim()
-    ) {
+    if (!message.trim()) {
       setError(
         "Please enter a notification message."
       );
-
       return;
     }
 
     if (
-      selectedStudentIds.length ===
-      0
+      audience === "selected" &&
+      selectedStudentIds.length === 0
     ) {
       setError(
         "Please select at least one student."
       );
-
       return;
     }
 
@@ -356,702 +400,985 @@ function Notifications() {
         await api.post(
           "/notifications/send",
           {
+            audience,
+            type,
+
             studentIds:
-              selectedStudentIds,
+              audience === "selected"
+                ? selectedStudentIds
+                : [],
 
             title:
               title.trim(),
 
             message:
-              message.trim()
+              message.trim(),
+
+            month:
+              type ===
+                "fee_reminder" ||
+              audience === "unpaid"
+                ? Number(month)
+                : undefined,
+
+            year:
+              type ===
+                "fee_reminder" ||
+              audience === "unpaid"
+                ? Number(year)
+                : undefined
           }
         );
 
+      const summary =
+        response.data.summary;
+
+      setSuccess(
+        `Notification sent to ${
+          summary?.successful ?? 0
+        } of ${
+          summary?.targeted ?? 0
+        } selected students.`
+      );
+
       if (
-        !response.data.success
+        audience === "selected"
       ) {
-        throw new Error(
-          response.data.message ||
-            "Failed to send notification"
+        setSelectedStudentIds(
+          []
         );
       }
 
-      setSuccess(
-        response.data.message
-      );
-
-      setTitle("");
-      setMessage("");
-      setSelectedStudentIds(
-        []
-      );
-
-      await loadNotifications();
-    } catch (error) {
+      await loadData(true);
+    } catch (requestError) {
       console.error(
         "Send notification error:",
-        error
+        requestError
       );
 
       setError(
-        error.response?.data?.message ||
-          error.message ||
-          "Failed to send notification"
+        requestError.response?.data
+          ?.message ||
+          requestError.message ||
+          "Unable to send notification."
       );
     } finally {
       setSending(false);
     }
   }
 
-  /*
-   * ------------------------------------------
-   * Refresh everything
-   * ------------------------------------------
-   */
-  async function handleRefresh() {
-    setRefreshing(true);
-    setError("");
-
-    await Promise.all([
-      loadStudents(),
-      loadNotifications()
-    ]);
-
-    setRefreshing(false);
-  }
-
-  /*
-   * ------------------------------------------
-   * Date formatting
-   * ------------------------------------------
-   */
-  function formatDate(
-    date
-  ) {
-    if (!date) {
-      return "—";
-    }
-
-    return new Date(
-      date
-    ).toLocaleString(
-      "en-IN",
-      {
-        day: "2-digit",
-        month: "short",
-        year: "numeric",
-        hour: "2-digit",
-        minute: "2-digit"
-      }
-    );
-  }
-
-  /*
-   * ------------------------------------------
-   * Notification status
-   * ------------------------------------------
-   */
-  function getStatusBadge(
-    status
-  ) {
-    if (
-      status === "sent"
-    ) {
-      return (
-        <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-3 py-1 text-xs font-semibold text-green-700">
-          <CheckCircle2 className="h-3.5 w-3.5" />
-          Sent
-        </span>
-      );
-    }
-
-    if (
-      status === "queued"
-    ) {
-      return (
-        <span className="inline-flex items-center gap-1 rounded-full bg-yellow-100 px-3 py-1 text-xs font-semibold text-yellow-700">
-          <Clock3 className="h-3.5 w-3.5" />
-          Queued
-        </span>
-      );
-    }
-
+  if (loading) {
     return (
-      <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-3 py-1 text-xs font-semibold text-red-700">
-        <XCircle className="h-3.5 w-3.5" />
-        Failed
-      </span>
+      <div className="min-h-screen bg-[#f7f7f5] px-4 py-8 sm:px-6 lg:px-8">
+        <div className="mx-auto max-w-7xl animate-pulse">
+          <div className="h-8 w-64 rounded-lg bg-gray-200" />
+
+          <div className="mt-3 h-4 w-96 max-w-full rounded bg-gray-200" />
+
+          <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {Array.from({
+              length: 4
+            }).map((_, index) => (
+              <div
+                key={index}
+                className="h-28 rounded-2xl bg-white shadow-sm"
+              />
+            ))}
+          </div>
+
+          <div className="mt-6 h-[620px] rounded-3xl bg-white shadow-sm" />
+        </div>
+      </div>
     );
   }
-
-  const filteredIds =
-    filteredStudents.map(
-      (student) =>
-        student._id
-    );
-
-  const allFilteredSelected =
-    filteredIds.length > 0 &&
-    filteredIds.every(
-      (id) =>
-        selectedStudentIds.includes(
-          id
-        )
-    );
 
   return (
-    <div className="min-h-screen bg-gray-100">
-      {/* Navbar */}
-      <nav className="sticky top-0 z-20 border-b border-gray-200 bg-white shadow-sm">
-        <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-[#f7f7f5] text-slate-900">
+      <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
+        {/* Header */}
+        <header className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
           <div>
-            <h1 className="text-lg font-bold text-gray-800 sm:text-xl">
-              Shri Krishna Digital Library
+            <div className="inline-flex items-center gap-2 rounded-full bg-orange-50 px-3 py-1.5 text-xs font-bold uppercase tracking-[0.16em] text-orange-700 ring-1 ring-orange-100">
+              <BellRing className="h-3.5 w-3.5" />
+              Communication Center
+            </div>
+
+            <h1 className="mt-4 text-3xl font-black tracking-tight text-slate-950 sm:text-4xl">
+              Notifications
             </h1>
 
-            <p className="text-xs text-gray-500 sm:text-sm">
-              Admin Notifications
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500 sm:text-base">
+              Send fee reminders and important
+              library announcements directly to
+              students who have enabled browser
+              notifications.
             </p>
           </div>
 
           <button
             type="button"
-            onClick={
-              handleRefresh
+            onClick={() =>
+              loadData(true)
             }
-            disabled={
-              refreshing
-            }
-            className="flex items-center gap-2 rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
+            disabled={refreshing}
+            className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-slate-300 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
           >
             <RefreshCw
-              className={`h-4 w-4 ${
+              className={
                 refreshing
-                  ? "animate-spin"
-                  : ""
-              }`}
+                  ? "h-4 w-4 animate-spin"
+                  : "h-4 w-4"
+              }
             />
 
-            <span className="hidden sm:inline">
-              Refresh
-            </span>
+            Refresh
           </button>
-        </div>
-      </nav>
+        </header>
 
-      <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
-        {/* Page header */}
-        <section className="mb-6">
-          <div className="flex items-start gap-3">
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-blue-100">
-              <Bell className="h-6 w-6 text-blue-600" />
-            </div>
+        {/* Stats */}
+        <section className="mt-7 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <StatCard
+            icon={Bell}
+            label="Total notifications"
+            value={stats.total}
+            tone="orange"
+          />
 
-            <div>
-              <h2 className="text-2xl font-bold text-gray-800 sm:text-3xl">
-                Send Notification
-              </h2>
+          <StatCard
+            icon={CheckCircle2}
+            label="Delivered"
+            value={stats.sent}
+            tone="green"
+          />
 
-              <p className="mt-1 text-sm text-gray-500">
-                Send announcements and
-                important updates to
-                registered students.
-              </p>
-            </div>
-          </div>
+          <StatCard
+            icon={CircleAlert}
+            label="Failed"
+            value={stats.failed}
+            tone="red"
+          />
+
+          <StatCard
+            icon={Clock3}
+            label="Queued"
+            value={stats.queued}
+            tone="amber"
+          />
         </section>
 
-        {/* Alerts */}
         {error && (
-          <div className="mb-6 flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-            <AlertCircle className="mt-0.5 h-5 w-5 shrink-0" />
+          <div className="mt-5 flex items-start gap-3 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+            <CircleAlert className="mt-0.5 h-5 w-5 shrink-0" />
 
             <p>{error}</p>
           </div>
         )}
 
         {success && (
-          <div className="mb-6 flex items-start gap-3 rounded-xl border border-green-200 bg-green-50 p-4 text-sm text-green-700">
+          <div className="mt-5 flex items-start gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-700">
             <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0" />
 
             <p>{success}</p>
           </div>
         )}
 
-        <div className="grid gap-6 lg:grid-cols-[1fr_1.1fr]">
-          {/* Notification form */}
-          <section className="rounded-2xl bg-white p-5 shadow-sm sm:p-6">
-            <div className="mb-6 flex items-center gap-3">
-              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-100">
-                <Send className="h-5 w-5 text-blue-600" />
-              </div>
+        <section className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1.55fr)_minmax(340px,0.8fr)]">
+          {/* Compose */}
+          <form
+            onSubmit={handleSend}
+            className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-[0_18px_55px_rgba(15,23,42,0.06)]"
+          >
+            <div className="border-b border-slate-100 px-5 py-5 sm:px-7">
+              <div className="flex items-start gap-4">
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-slate-950 text-white shadow-lg">
+                  <Send className="h-5 w-5" />
+                </div>
 
-              <div>
-                <h3 className="font-bold text-gray-800">
-                  Notification Details
-                </h3>
+                <div>
+                  <h2 className="text-lg font-bold text-slate-950">
+                    Compose notification
+                  </h2>
 
-                <p className="text-xs text-gray-500">
-                  Compose your message
-                </p>
+                  <p className="mt-1 text-sm text-slate-500">
+                    Choose who should receive the
+                    message and publish it instantly.
+                  </p>
+                </div>
               </div>
             </div>
 
-            <form
-              onSubmit={
-                handleSendNotification
-              }
-              className="space-y-5"
-            >
-              {/* Title */}
+            <div className="space-y-7 p-5 sm:p-7">
+              {/* Audience */}
               <div>
-                <div className="mb-2 flex items-center justify-between">
-                  <label
-                    htmlFor="notification-title"
-                    className="text-sm font-semibold text-gray-700"
-                  >
-                    Notification Title
-                  </label>
-
-                  <span className="text-xs text-gray-400">
-                    {title.length}/100
-                  </span>
-                </div>
-
-                <input
-                  id="notification-title"
-                  type="text"
-                  value={title}
-                  onChange={(event) =>
-                    setTitle(
-                      event.target.value
-                    )
-                  }
-                  maxLength={100}
-                  placeholder="e.g. Library Holiday Notice"
-                  className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-                />
-              </div>
-
-              {/* Message */}
-              <div>
-                <div className="mb-2 flex items-center justify-between">
-                  <label
-                    htmlFor="notification-message"
-                    className="text-sm font-semibold text-gray-700"
-                  >
-                    Message
-                  </label>
-
-                  <span className="text-xs text-gray-400">
-                    {message.length}/500
-                  </span>
-                </div>
-
-                <textarea
-                  id="notification-message"
-                  value={message}
-                  onChange={(event) =>
-                    setMessage(
-                      event.target.value
-                    )
-                  }
-                  maxLength={500}
-                  rows={6}
-                  placeholder="Write your notification message here..."
-                  className="w-full resize-none rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-                />
-              </div>
-
-              {/* Selected students */}
-              <div className="rounded-xl border border-blue-100 bg-blue-50 p-4">
-                <div className="flex items-center gap-3">
-                  <Users className="h-5 w-5 text-blue-600" />
-
+                <div className="mb-3 flex items-center justify-between gap-4">
                   <div>
-                    <p className="text-sm font-semibold text-blue-800">
-                      Recipients
+                    <label className="text-sm font-bold text-slate-800">
+                      Audience
+                    </label>
+
+                    <p className="mt-1 text-xs text-slate-500">
+                      Notifications are sent only to
+                      active students.
+                    </p>
+                  </div>
+
+                  {audience ===
+                    "selected" && (
+                    <span className="rounded-full bg-orange-50 px-3 py-1 text-xs font-bold text-orange-700">
+                      {
+                        selectedStudentIds.length
+                      }{" "}
+                      selected
+                    </span>
+                  )}
+                </div>
+
+                <div className="grid gap-3">
+                  {AUDIENCES.map(
+                    (item) => {
+                      const Icon =
+                        item.icon;
+
+                      const active =
+                        audience ===
+                        item.id;
+
+                      return (
+                        <button
+                          key={item.id}
+                          type="button"
+                          onClick={() =>
+                            setAudience(
+                              item.id
+                            )
+                          }
+                          className={`flex w-full items-start gap-4 rounded-2xl border p-4 text-left transition ${
+                            active
+                              ? "border-orange-300 bg-orange-50/70 ring-2 ring-orange-100"
+                              : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50"
+                          }`}
+                        >
+                          <span
+                            className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${
+                              active
+                                ? "bg-orange-600 text-white"
+                                : "bg-slate-100 text-slate-600"
+                            }`}
+                          >
+                            <Icon className="h-5 w-5" />
+                          </span>
+
+                          <span className="min-w-0 flex-1">
+                            <span className="block text-sm font-bold text-slate-900">
+                              {item.title}
+                            </span>
+
+                            <span className="mt-1 block text-xs leading-5 text-slate-500">
+                              {
+                                item.description
+                              }
+                            </span>
+                          </span>
+
+                          <span
+                            className={`mt-1 h-4 w-4 rounded-full border-2 ${
+                              active
+                                ? "border-orange-600 bg-orange-600 shadow-[inset_0_0_0_3px_white]"
+                                : "border-slate-300"
+                            }`}
+                          />
+                        </button>
+                      );
+                    }
+                  )}
+                </div>
+              </div>
+
+              {/* Student selector */}
+              {audience ===
+                "selected" && (
+                <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4 sm:p-5">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <p className="text-sm font-bold text-slate-800">
+                        Select students
+                      </p>
+
+                      <p className="mt-1 text-xs text-slate-500">
+                        {
+                          selectedStudents.length
+                        }{" "}
+                        active student
+                        {selectedStudents.length ===
+                        1
+                          ? ""
+                          : "s"}{" "}
+                        selected
+                      </p>
+                    </div>
+
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={
+                          selectAllVisible
+                        }
+                        className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                      >
+                        Select visible
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={
+                          clearSelected
+                        }
+                        className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-500 hover:bg-slate-50"
+                      >
+                        Clear
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="relative mt-4">
+                    <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+
+                    <input
+                      type="search"
+                      value={
+                        studentSearch
+                      }
+                      onChange={(
+                        event
+                      ) =>
+                        setStudentSearch(
+                          event.target
+                            .value
+                        )
+                      }
+                      placeholder="Search by name, mobile or seat..."
+                      className="w-full rounded-xl border border-slate-200 bg-white py-3 pl-10 pr-4 text-sm outline-none transition focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
+                    />
+                  </div>
+
+                  <div className="mt-3 max-h-64 space-y-2 overflow-y-auto pr-1">
+                    {filteredStudents.length ===
+                    0 ? (
+                      <div className="rounded-xl border border-dashed border-slate-300 bg-white px-4 py-8 text-center text-sm text-slate-500">
+                        No active students
+                        found.
+                      </div>
+                    ) : (
+                      filteredStudents.map(
+                        (student) => {
+                          const selected =
+                            selectedStudentIds.includes(
+                              student._id
+                            );
+
+                          return (
+                            <button
+                              key={
+                                student._id
+                              }
+                              type="button"
+                              onClick={() =>
+                                toggleStudent(
+                                  student._id
+                                )
+                              }
+                              className={`flex w-full items-center gap-3 rounded-xl border p-3 text-left transition ${
+                                selected
+                                  ? "border-orange-200 bg-orange-50"
+                                  : "border-transparent bg-white hover:border-slate-200 hover:bg-slate-50"
+                              }`}
+                            >
+                              <span
+                                className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${
+                                  selected
+                                    ? "bg-orange-600 text-white"
+                                    : "bg-slate-100 text-slate-500"
+                                }`}
+                              >
+                                {selected ? (
+                                  <CheckCircle2 className="h-4 w-4" />
+                                ) : (
+                                  <UserRound className="h-4 w-4" />
+                                )}
+                              </span>
+
+                              <span className="min-w-0 flex-1">
+                                <span className="block truncate text-sm font-semibold text-slate-800">
+                                  {
+                                    student.name
+                                  }
+                                </span>
+
+                                <span className="mt-0.5 block truncate text-xs text-slate-500">
+                                  {student.phoneNumber ||
+                                    "No mobile"}
+
+                                  {student.seatNumber
+                                    ? ` • Seat ${student.seatNumber}`
+                                    : ""}
+                                </span>
+                              </span>
+
+                              <span
+                                className={`h-4 w-4 rounded border ${
+                                  selected
+                                    ? "border-orange-600 bg-orange-600"
+                                    : "border-slate-300 bg-white"
+                                }`}
+                              />
+                            </button>
+                          );
+                        }
+                      )
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Type */}
+              <div>
+                <label className="text-sm font-bold text-slate-800">
+                  Notification type
+                </label>
+
+                <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                  <TypeButton
+                    active={
+                      type ===
+                      "fee_reminder"
+                    }
+                    icon={WalletCards}
+                    title="Fee reminder"
+                    description="Remind students about pending monthly fees."
+                    onClick={() =>
+                      setType(
+                        "fee_reminder"
+                      )
+                    }
+                  />
+
+                  <TypeButton
+                    active={
+                      type ===
+                      "announcement"
+                    }
+                    icon={Megaphone}
+                    title="Announcement"
+                    description="Share library news, schedules or important updates."
+                    onClick={() =>
+                      setType(
+                        "announcement"
+                      )
+                    }
+                  />
+                </div>
+              </div>
+
+              {/* Fee period */}
+              {(type ===
+                "fee_reminder" ||
+                audience ===
+                  "unpaid") && (
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <SelectField
+                    label="Fee month"
+                    value={month}
+                    onChange={(
+                      event
+                    ) =>
+                      setMonth(
+                        Number(
+                          event.target
+                            .value
+                        )
+                      )
+                    }
+                    options={MONTHS.map(
+                      (
+                        name,
+                        index
+                      ) => ({
+                        value:
+                          index + 1,
+                        label:
+                          name
+                      })
+                    )}
+                  />
+
+                  <SelectField
+                    label="Fee year"
+                    value={year}
+                    onChange={(
+                      event
+                    ) =>
+                      setYear(
+                        Number(
+                          event.target
+                            .value
+                        )
+                      )
+                    }
+                    options={yearOptions.map(
+                      (value) => ({
+                        value,
+                        label:
+                          String(
+                            value
+                          )
+                      })
+                    )}
+                  />
+                </div>
+              )}
+
+              {/* Content */}
+              <div className="space-y-5">
+                <div>
+                  <div className="mb-2 flex items-center justify-between gap-3">
+                    <label
+                      htmlFor="notification-title"
+                      className="text-sm font-bold text-slate-800"
+                    >
+                      Title
+                    </label>
+
+                    <span className="text-xs text-slate-400">
+                      {title.length}/80
+                    </span>
+                  </div>
+
+                  <input
+                    id="notification-title"
+                    value={title}
+                    maxLength={80}
+                    onChange={(
+                      event
+                    ) =>
+                      setTitle(
+                        event.target
+                          .value
+                      )
+                    }
+                    placeholder="Enter notification title"
+                    className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium outline-none transition placeholder:text-slate-400 focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
+                  />
+                </div>
+
+                <div>
+                  <div className="mb-2 flex items-center justify-between gap-3">
+                    <label
+                      htmlFor="notification-message"
+                      className="text-sm font-bold text-slate-800"
+                    >
+                      Message
+                    </label>
+
+                    <span className="text-xs text-slate-400">
+                      {message.length}/500
+                    </span>
+                  </div>
+
+                  <textarea
+                    id="notification-message"
+                    value={message}
+                    maxLength={500}
+                    rows={5}
+                    onChange={(
+                      event
+                    ) =>
+                      setMessage(
+                        event.target
+                          .value
+                      )
+                    }
+                    placeholder="Write your notification..."
+                    className="w-full resize-y rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm leading-6 outline-none transition placeholder:text-slate-400 focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
+                  />
+                </div>
+              </div>
+
+              {/* Send */}
+              <div className="flex flex-col gap-4 rounded-2xl border border-orange-100 bg-orange-50/70 p-4 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="text-sm font-bold text-orange-950">
+                    Ready to send
+                  </p>
+
+                  <p className="mt-1 text-xs leading-5 text-orange-800/70">
+                    Students must have enabled
+                    browser notifications on
+                    their device to receive this
+                    push message.
+                  </p>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={sending}
+                  className="inline-flex w-full shrink-0 items-center justify-center gap-2 rounded-xl bg-slate-950 px-5 py-3 text-sm font-bold text-white shadow-lg transition hover:-translate-y-0.5 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
+                >
+                  <Send className="h-4 w-4" />
+
+                  {sending
+                    ? "Sending..."
+                    : "Send notification"}
+                </button>
+              </div>
+            </div>
+          </form>
+
+          {/* Preview + recent */}
+          <aside className="space-y-6">
+            {/* Preview */}
+            <div className="overflow-hidden rounded-3xl bg-slate-950 text-white shadow-[0_18px_55px_rgba(15,23,42,0.12)]">
+              <div className="border-b border-white/10 px-5 py-5 sm:px-6">
+                <div className="flex items-center justify-between gap-4">
+                  <div>
+                    <p className="text-xs font-bold uppercase tracking-[0.16em] text-orange-300">
+                      Live preview
                     </p>
 
-                    <p className="text-xs text-blue-600">
-                      {selectedStudentIds.length}{" "}
-                      student(s) selected
-                    </p>
+                    <h2 className="mt-1 text-lg font-bold">
+                      Student notification
+                    </h2>
+                  </div>
+
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/10">
+                    <Bell className="h-5 w-5 text-orange-300" />
                   </div>
                 </div>
               </div>
 
-              <button
-                type="submit"
-                disabled={
-                  sending ||
-                  selectedStudentIds.length ===
-                    0 ||
-                  !title.trim() ||
-                  !message.trim()
-                }
-                className="flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 py-3 font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {sending ? (
-                  <>
-                    <Loader2 className="h-5 w-5 animate-spin" />
-                    Sending...
-                  </>
-                ) : (
-                  <>
-                    <BellRing className="h-5 w-5" />
-                    Send Notification
-                  </>
-                )}
-              </button>
-            </form>
-          </section>
+              <div className="p-5 sm:p-6">
+                <div className="rounded-2xl bg-white p-4 text-slate-900 shadow-2xl">
+                  <div className="flex gap-3">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-orange-100 text-orange-700">
+                      {type ===
+                      "fee_reminder" ? (
+                        <WalletCards className="h-5 w-5" />
+                      ) : (
+                        <Megaphone className="h-5 w-5" />
+                      )}
+                    </div>
 
-          {/* Student selection */}
-          <section className="rounded-2xl bg-white p-5 shadow-sm sm:p-6">
-            <div className="mb-5 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <h3 className="font-bold text-gray-800">
-                  Select Students
-                </h3>
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-bold">
+                        {title ||
+                          "Notification title"}
+                      </p>
 
-                <p className="text-xs text-gray-500">
-                  Only active students are shown
-                </p>
-              </div>
+                      <p className="mt-1 text-xs leading-5 text-slate-500">
+                        {message ||
+                          "Your notification message will appear here."}
+                      </p>
+                    </div>
+                  </div>
 
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={
-                    selectAllStudents
-                  }
-                  className="rounded-lg border border-blue-200 px-3 py-2 text-xs font-semibold text-blue-600 transition hover:bg-blue-50"
-                >
-                  Select All
-                </button>
+                  <p className="mt-3 text-[10px] font-medium uppercase tracking-wider text-slate-400">
+                    Shri Krishna Digital Library •
+                    now
+                  </p>
+                </div>
 
-                <button
-                  type="button"
-                  onClick={
-                    clearSelection
-                  }
-                  className="rounded-lg border border-gray-200 px-3 py-2 text-xs font-semibold text-gray-600 transition hover:bg-gray-50"
-                >
-                  Clear
-                </button>
+                <div className="mt-5 grid grid-cols-2 gap-3">
+                  <PreviewMetric
+                    label="Audience"
+                    value={
+                      audience ===
+                      "all_active"
+                        ? `${activeStudents.length} active`
+                        : audience ===
+                          "unpaid"
+                        ? "Unpaid fees"
+                        : `${selectedStudentIds.length} selected`
+                    }
+                  />
+
+                  <PreviewMetric
+                    label="Type"
+                    value={
+                      type ===
+                      "fee_reminder"
+                        ? "Fee reminder"
+                        : "Announcement"
+                    }
+                  />
+                </div>
               </div>
             </div>
 
-            {/* Search */}
-            <div className="relative mb-4">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+            {/* Recent */}
+            <div className="rounded-3xl border border-slate-200 bg-white shadow-sm">
+              <div className="flex items-center justify-between border-b border-slate-100 px-5 py-5">
+                <div>
+                  <h2 className="text-base font-bold text-slate-950">
+                    Recent notifications
+                  </h2>
 
-              <input
-                type="text"
-                value={search}
-                onChange={(event) =>
-                  setSearch(
-                    event.target.value
-                  )
-                }
-                placeholder="Search by name, mobile, father name or seat..."
-                className="w-full rounded-xl border border-gray-300 py-3 pl-10 pr-4 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-              />
-            </div>
+                  <p className="mt-1 text-xs text-slate-500">
+                    Latest delivery activity
+                  </p>
+                </div>
 
-            {/* Filtered select all */}
-            {filteredStudents.length >
-              0 && (
-              <button
-                type="button"
-                onClick={
-                  toggleSelectAll
-                }
-                className="mb-3 flex items-center gap-2 text-xs font-semibold text-blue-600"
-              >
-                <span
-                  className={`flex h-4 w-4 items-center justify-center rounded border ${
-                    allFilteredSelected
-                      ? "border-blue-600 bg-blue-600 text-white"
-                      : "border-gray-300"
-                  }`}
-                >
-                  {allFilteredSelected &&
-                    "✓"}
+                <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-600">
+                  {
+                    notifications.length
+                  }
                 </span>
+              </div>
 
-                Select all visible students
-              </button>
-            )}
-
-            {/* Students */}
-            <div className="max-h-[430px] space-y-2 overflow-y-auto pr-1">
-              {loadingStudents ? (
-                <div className="py-12 text-center">
-                  <Loader2 className="mx-auto h-8 w-8 animate-spin text-blue-600" />
-
-                  <p className="mt-3 text-sm text-gray-500">
-                    Loading students...
-                  </p>
-                </div>
-              ) : filteredStudents.length ===
+              <div className="max-h-[430px] divide-y divide-slate-100 overflow-y-auto">
+                {notifications.length ===
                 0 ? (
-                <div className="rounded-xl border border-dashed border-gray-300 px-4 py-10 text-center">
-                  <Users className="mx-auto h-9 w-9 text-gray-400" />
+                  <div className="px-5 py-10 text-center">
+                    <Bell className="mx-auto h-8 w-8 text-slate-300" />
 
-                  <p className="mt-3 text-sm font-medium text-gray-700">
-                    No active students found
-                  </p>
-                </div>
-              ) : (
-                filteredStudents.map(
-                  (student) => {
-                    const selected =
-                      selectedStudentIds.includes(
-                        student._id
-                      );
+                    <p className="mt-3 text-sm font-semibold text-slate-700">
+                      No notifications yet
+                    </p>
 
-                    return (
-                      <button
+                    <p className="mt-1 text-xs leading-5 text-slate-500">
+                      Your sent notifications
+                      will appear here.
+                    </p>
+                  </div>
+                ) : (
+                  notifications.map(
+                    (notification) => (
+                      <div
                         key={
-                          student._id
+                          notification._id
                         }
-                        type="button"
-                        onClick={() =>
-                          toggleStudent(
-                            student._id
-                          )
-                        }
-                        className={`flex w-full items-center gap-3 rounded-xl border p-3 text-left transition ${
-                          selected
-                            ? "border-blue-300 bg-blue-50"
-                            : "border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50"
-                        }`}
+                        className="px-5 py-4"
                       >
-                        <span
-                          className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border text-xs font-bold ${
-                            selected
-                              ? "border-blue-600 bg-blue-600 text-white"
-                              : "border-gray-300"
-                          }`}
-                        >
-                          {selected &&
-                            "✓"}
-                        </span>
-
-                        <div className="min-w-0 flex-1">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <p className="truncate text-sm font-semibold text-gray-800">
-                              {
-                                student.name
-                              }
-                            </p>
-
-                            {student.seatNumber && (
-                              <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-semibold text-gray-600">
-                                Seat{" "}
-                                {
-                                  student.seatNumber
-                                }
-                              </span>
+                        <div className="flex items-start gap-3">
+                          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-600">
+                            {notification.type ===
+                            "fee_reminder" ? (
+                              <WalletCards className="h-4 w-4" />
+                            ) : (
+                              <Megaphone className="h-4 w-4" />
                             )}
                           </div>
 
-                          <p className="mt-1 truncate text-xs text-gray-500">
-                            {
-                              student.phoneNumber
-                            }
-                          </p>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                              <div className="min-w-0">
+                                <p className="truncate text-sm font-bold text-slate-800">
+                                  {notification.title ||
+                                    notification.type.replace(
+                                      "_",
+                                      " "
+                                    )}
+                                </p>
+
+                                <p className="mt-1 line-clamp-2 text-xs leading-5 text-slate-500">
+                                  {
+                                    notification.message
+                                  }
+                                </p>
+                              </div>
+
+                              <span
+                                className={`inline-flex w-fit shrink-0 items-center rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide ring-1 ${getStatusClasses(
+                                  notification.status
+                                )}`}
+                              >
+                                {
+                                  notification.status
+                                }
+                              </span>
+                            </div>
+
+                            <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] font-medium text-slate-400">
+                              <span>
+                                {notification
+                                  .studentId
+                                  ?.name ||
+                                  "Student"}
+                              </span>
+
+                              <span>
+                                •
+                              </span>
+
+                              <span>
+                                {formatDate(
+                                  notification.createdAt
+                                )}
+                              </span>
+                            </div>
+                          </div>
                         </div>
-                      </button>
-                    );
-                  }
-                )
-              )}
-            </div>
-          </section>
-        </div>
-
-        {/* Notification history */}
-        <section className="mt-6 rounded-2xl bg-white p-5 shadow-sm sm:p-6">
-          <div className="mb-5 flex items-center gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-purple-100">
-              <Clock3 className="h-5 w-5 text-purple-600" />
-            </div>
-
-            <div>
-              <h3 className="font-bold text-gray-800">
-                Notification History
-              </h3>
-
-              <p className="text-xs text-gray-500">
-                Previously sent notifications
-              </p>
-            </div>
-          </div>
-
-          {loadingNotifications ? (
-            <div className="py-12 text-center">
-              <Loader2 className="mx-auto h-8 w-8 animate-spin text-blue-600" />
-
-              <p className="mt-3 text-sm text-gray-500">
-                Loading notification history...
-              </p>
-            </div>
-          ) : notifications.length ===
-            0 ? (
-            <div className="rounded-xl border border-dashed border-gray-300 px-5 py-10 text-center">
-              <Bell className="mx-auto h-10 w-10 text-gray-400" />
-
-              <p className="mt-3 font-medium text-gray-700">
-                No notifications yet
-              </p>
-
-              <p className="mt-1 text-sm text-gray-500">
-                Sent notifications will appear here.
-              </p>
-            </div>
-          ) : (
-            <>
-              {/* Mobile history */}
-              <div className="space-y-3 md:hidden">
-                {notifications.map(
-                  (notification) => (
-                    <div
-                      key={
-                        notification._id
-                      }
-                      className="rounded-xl border border-gray-200 p-4"
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <p className="font-semibold text-gray-800">
-                            {
-                              notification.title
-                            }
-                          </p>
-
-                          <p className="mt-1 text-xs text-gray-500">
-                            {notification.studentId?.name ||
-                              "Student"}
-                          </p>
-                        </div>
-
-                        {getStatusBadge(
-                          notification.status
-                        )}
                       </div>
-
-                      <p className="mt-3 text-sm leading-6 text-gray-600">
-                        {
-                          notification.message
-                        }
-                      </p>
-
-                      <p className="mt-3 text-xs text-gray-400">
-                        {formatDate(
-                          notification.createdAt
-                        )}
-                      </p>
-                    </div>
+                    )
                   )
                 )}
               </div>
-
-              {/* Desktop history */}
-              <div className="hidden overflow-x-auto md:block">
-                <table className="w-full min-w-[800px] text-left">
-                  <thead>
-                    <tr className="border-b border-gray-200 text-xs uppercase tracking-wide text-gray-500">
-                      <th className="px-4 py-3 font-semibold">
-                        Student
-                      </th>
-
-                      <th className="px-4 py-3 font-semibold">
-                        Notification
-                      </th>
-
-                      <th className="px-4 py-3 font-semibold">
-                        Channel
-                      </th>
-
-                      <th className="px-4 py-3 font-semibold">
-                        Status
-                      </th>
-
-                      <th className="px-4 py-3 font-semibold">
-                        Date
-                      </th>
-                    </tr>
-                  </thead>
-
-                  <tbody>
-                    {notifications.map(
-                      (
-                        notification
-                      ) => (
-                        <tr
-                          key={
-                            notification._id
-                          }
-                          className="border-b border-gray-100 last:border-0"
-                        >
-                          <td className="px-4 py-4">
-                            <p className="text-sm font-semibold text-gray-800">
-                              {notification.studentId?.name ||
-                                "Student"}
-                            </p>
-
-                            <p className="mt-1 text-xs text-gray-500">
-                              {notification.studentId?.phoneNumber ||
-                                "—"}
-                            </p>
-                          </td>
-
-                          <td className="max-w-[350px] px-4 py-4">
-                            <p className="text-sm font-semibold text-gray-800">
-                              {
-                                notification.title
-                              }
-                            </p>
-
-                            <p className="mt-1 truncate text-xs text-gray-500">
-                              {
-                                notification.message
-                              }
-                            </p>
-                          </td>
-
-                          <td className="px-4 py-4 text-sm capitalize text-gray-600">
-                            {
-                              notification.channel
-                            }
-                          </td>
-
-                          <td className="px-4 py-4">
-                            {getStatusBadge(
-                              notification.status
-                            )}
-                          </td>
-
-                          <td className="px-4 py-4 text-xs text-gray-500">
-                            {formatDate(
-                              notification.createdAt
-                            )}
-                          </td>
-                        </tr>
-                      )
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </>
-          )}
+            </div>
+          </aside>
         </section>
+
+        <div className="mt-6 flex items-start gap-3 rounded-2xl border border-slate-200 bg-white p-4 text-xs leading-5 text-slate-500 shadow-sm">
+          <ChevronDown className="mt-0.5 h-4 w-4 shrink-0 rotate-[-90deg] text-slate-400" />
+
+          <p>
+            Push notifications use Firebase Cloud
+            Messaging. The library operator still
+            controls when messages are sent; there
+            are no automatic fee reminders in this
+            workflow.
+          </p>
+        </div>
       </main>
     </div>
   );
 }
 
-export default Notifications;
+function StatCard({
+  icon: Icon,
+  label,
+  value,
+  tone
+}) {
+  const toneClasses = {
+    orange:
+      "bg-orange-50 text-orange-700",
+
+    green:
+      "bg-emerald-50 text-emerald-700",
+
+    red:
+      "bg-red-50 text-red-700",
+
+    amber:
+      "bg-amber-50 text-amber-700"
+  };
+
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+      <div className="flex items-center justify-between gap-4">
+        <span
+          className={`flex h-10 w-10 items-center justify-center rounded-xl ${toneClasses[tone]}`}
+        >
+          <Icon className="h-5 w-5" />
+        </span>
+
+        <span className="text-2xl font-black tracking-tight text-slate-950">
+          {value}
+        </span>
+      </div>
+
+      <p className="mt-4 text-xs font-semibold uppercase tracking-[0.08em] text-slate-400">
+        {label}
+      </p>
+    </div>
+  );
+}
+
+function TypeButton({
+  active,
+  icon: Icon,
+  title,
+  description,
+  onClick
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`flex items-start gap-3 rounded-2xl border p-4 text-left transition ${
+        active
+          ? "border-slate-900 bg-slate-950 text-white"
+          : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50"
+      }`}
+    >
+      <span
+        className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${
+          active
+            ? "bg-white/10 text-orange-300"
+            : "bg-slate-100 text-slate-600"
+        }`}
+      >
+        <Icon className="h-4 w-4" />
+      </span>
+
+      <span>
+        <span
+          className={`block text-sm font-bold ${
+            active
+              ? "text-white"
+              : "text-slate-900"
+          }`}
+        >
+          {title}
+        </span>
+
+        <span
+          className={`mt-1 block text-xs leading-5 ${
+            active
+              ? "text-slate-300"
+              : "text-slate-500"
+          }`}
+        >
+          {description}
+        </span>
+      </span>
+    </button>
+  );
+}
+
+function SelectField({
+  label,
+  value,
+  onChange,
+  options
+}) {
+  return (
+    <div>
+      <label className="mb-2 block text-sm font-bold text-slate-800">
+        {label}
+      </label>
+
+      <select
+        value={value}
+        onChange={onChange}
+        className="w-full appearance-none rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium outline-none transition focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
+      >
+        {options.map(
+          (option) => (
+            <option
+              key={option.value}
+              value={option.value}
+            >
+              {option.label}
+            </option>
+          )
+        )}
+      </select>
+    </div>
+  );
+}
+
+function PreviewMetric({
+  label,
+  value
+}) {
+  return (
+    <div className="rounded-xl bg-white/5 p-3 ring-1 ring-white/10">
+      <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+        {label}
+      </p>
+
+      <p className="mt-1 truncate text-xs font-semibold text-white">
+        {value}
+      </p>
+    </div>
+  );
+}
