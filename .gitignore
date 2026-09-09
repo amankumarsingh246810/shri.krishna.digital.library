@@ -5,5 +5,9 @@ dist/
 .env.*
 !.env.example
 
+# Firebase
+serviceAccountKey.json
+firebase-service-account.json
+
 .DS_Store
 *.log

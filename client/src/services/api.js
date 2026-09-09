@@ -19,33 +19,74 @@ const api = axios.create({
 });
 
 /*
- * Request interceptor
+ * Get a fresh Firebase ID token.
  *
- * Automatically attaches:
+ * This function is ONLY used by student-authenticated
+ * requests.
+ */
+export async function getStudentIdToken(
+  forceRefresh = false
+) {
+  const user = auth.currentUser;
+
+  if (!user) {
+    throw new Error(
+      "Student is not authenticated"
+    );
+  }
+
+  return user.getIdToken(
+    forceRefresh
+  );
+}
+
+/*
+ * Request interceptor.
  *
- * 1. Admin JWT for admin requests
- * 2. Fresh Firebase ID token for student requests
+ * Admin requests:
+ *     → adminToken
+ *
+ * Student requests:
+ *     → Firebase ID token
  */
 api.interceptors.request.use(
   async (config) => {
-    /*
-     * ------------------------------------------------
-     * STUDENT AUTHENTICATION
-     * ------------------------------------------------
-     *
-     * If a Firebase student is logged in,
-     * getIdToken() automatically returns a valid
-     * token and refreshes it when necessary.
-     */
-    const firebaseUser = auth.currentUser;
+    const requestUrl =
+      config.url || "";
 
-    if (
-      firebaseUser &&
-      !config.headers.Authorization
-    ) {
+    /*
+     * ---------------------------------------------
+     * STUDENT REQUEST
+     * ---------------------------------------------
+     *
+     * Only routes under /student-auth/
+     * should use Firebase authentication.
+     */
+    const isStudentRequest =
+      requestUrl.startsWith(
+        "/student-auth/"
+      );
+
+    if (isStudentRequest) {
       try {
+        const firebaseUser =
+          auth.currentUser;
+
+        if (!firebaseUser) {
+          throw new Error(
+            "Student is not authenticated"
+          );
+        }
+
+        /*
+         * Firebase automatically refreshes the ID
+         * token when necessary.
+         */
         const firebaseIdToken =
           await firebaseUser.getIdToken();
+
+        config.headers =
+          config.headers || {};
 
         config.headers.Authorization =
           `Bearer ${firebaseIdToken}`;
@@ -54,29 +95,32 @@ api.interceptors.request.use(
           "Failed to get Firebase ID token:",
           error
         );
+
+        return Promise.reject(error);
       }
+
+      return config;
     }
 
     /*
-     * ------------------------------------------------
-     * ADMIN AUTHENTICATION
-     * ------------------------------------------------
+     * ---------------------------------------------
+     * ADMIN REQUEST
+     * ---------------------------------------------
      *
-     * Only use the admin token when there isn't
-     * already a Firebase Authorization header.
+     * All other protected API requests use
+     * the admin JWT.
      */
-    if (
-      !config.headers.Authorization
-    ) {
-      const adminToken =
-        localStorage.getItem(
-          "adminToken"
-        );
+    const adminToken =
+      localStorage.getItem(
+        "adminToken"
+      );
 
-      if (adminToken) {
-        config.headers.Authorization =
-          `Bearer ${adminToken}`;
-      }
+    if (adminToken) {
+      config.headers =
+        config.headers || {};
+
+      config.headers.Authorization =
+        `Bearer ${adminToken}`;
     }
 
     return config;
@@ -87,7 +131,7 @@ api.interceptors.request.use(
 );
 
 /*
- * Response interceptor
+ * Response interceptor.
  */
 api.interceptors.response.use(
   (response) => response,
@@ -99,25 +143,33 @@ api.interceptors.response.use(
     const originalRequest =
       error.config;
 
+    const requestUrl =
+      originalRequest?.url || "";
+
+    const isStudentRequest =
+      requestUrl.startsWith(
+        "/student-auth/"
+      );
+
     /*
-     * ------------------------------------------------
-     * FIREBASE TOKEN EXPIRED
-     * ------------------------------------------------
+     * ---------------------------------------------
+     * STUDENT TOKEN EXPIRED
+     * ---------------------------------------------
      *
-     * If backend rejects the Firebase token,
-     * force-refresh the token and retry the request
-     * once.
+     * Force Firebase to refresh the token once
+     * and retry the request.
      */
     if (
       status === 401 &&
-      !originalRequest?._firebaseRetry &&
-      auth.currentUser
+      isStudentRequest &&
+      !originalRequest?._firebaseRetry
     ) {
-      originalRequest._firebaseRetry = true;
+      originalRequest._firebaseRetry =
+        true;
 
       try {
         const freshToken =
-          await auth.currentUser.getIdToken(
+          await getStudentIdToken(
             true
           );
 
@@ -127,17 +179,15 @@ api.interceptors.response.use(
         originalRequest.headers.Authorization =
           `Bearer ${freshToken}`;
 
-        return api(originalRequest);
+        return api(
+          originalRequest
+        );
       } catch (refreshError) {
         console.error(
           "Firebase token refresh failed:",
           refreshError
         );
 
-        /*
-         * Firebase could not refresh the session.
-         * Sign the student out.
-         */
         try {
           await auth.signOut();
         } catch {
@@ -154,34 +204,35 @@ api.interceptors.response.use(
     }
 
     /*
-     * ------------------------------------------------
-     * ADMIN TOKEN EXPIRED
-     * ------------------------------------------------
+     * ---------------------------------------------
+     * ADMIN TOKEN EXPIRED / INVALID
+     * ---------------------------------------------
      */
-    const adminToken =
-      localStorage.getItem(
-        "adminToken"
-      );
-
     if (
       status === 401 &&
-      adminToken &&
-      !auth.currentUser
+      !isStudentRequest
     ) {
-      localStorage.removeItem(
-        "adminToken"
-      );
+      const adminToken =
+        localStorage.getItem(
+          "adminToken"
+        );
 
-      localStorage.removeItem(
-        "admin"
-      );
+      if (adminToken) {
+        localStorage.removeItem(
+          "adminToken"
+        );
 
-      if (
-        window.location.pathname !==
-        "/admin/login"
-      ) {
-        window.location.href =
-          "/admin/login";
+        localStorage.removeItem(
+          "admin"
+        );
+
+        if (
+          window.location.pathname !==
+          "/admin/login"
+        ) {
+          window.location.href =
+            "/admin/login";
+        }
       }
     }
 
