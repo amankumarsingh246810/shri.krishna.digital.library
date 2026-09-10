@@ -1,122 +1,157 @@
-import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import React, {
+  useEffect,
+  useMemo,
+  useState
+} from "react";
 
 import {
-  AlertCircle,
+  Link,
+  useNavigate
+} from "react-router-dom";
+
+import {
   ArrowLeft,
+  ArrowRight,
   Bell,
   BellRing,
-  CalendarDays,
   Check,
   CheckCircle2,
   ChevronDown,
   Clock3,
-  Info,
+  FileText,
+  GraduationCap,
+  History,
   Loader2,
   Megaphone,
+  MessageSquare,
   RefreshCw,
   Search,
   Send,
   Sparkles,
   Users,
-  UserCheck,
+  UserRound,
   X,
   XCircle
 } from "lucide-react";
 
 import api from "../../services/api";
 
+import "./Notifications.css";
 
-// ============================================================
-// CONSTANTS
-// ============================================================
+
+/* =========================================================
+   CONSTANTS
+========================================================= */
 
 const MONTHS = [
-  { value: 1, label: "January" },
-  { value: 2, label: "February" },
-  { value: 3, label: "March" },
-  { value: 4, label: "April" },
-  { value: 5, label: "May" },
-  { value: 6, label: "June" },
-  { value: 7, label: "July" },
-  { value: 8, label: "August" },
-  { value: 9, label: "September" },
-  { value: 10, label: "October" },
-  { value: 11, label: "November" },
-  { value: 12, label: "December" }
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December"
 ];
+
 
 const AUDIENCES = [
   {
-    value: "all_active",
+    id: "all_active",
     title: "All Active Students",
-    description: "Send to every currently active student.",
-    icon: Users
+    description:
+      "Send this notification to every currently active student.",
+    icon: Users,
+    tone: "orange"
   },
   {
-    value: "unpaid",
+    id: "unpaid",
     title: "Students With Unpaid Fees",
-    description: "Target active students who have not paid.",
-    icon: Clock3
+    description:
+      "Target active students whose selected month's fee is unpaid.",
+    icon: BellRing,
+    tone: "brown"
   },
   {
-    value: "selected",
+    id: "selected",
     title: "Selected Students",
-    description: "Choose specific students manually.",
-    icon: UserCheck
+    description:
+      "Choose specific students who should receive the notification.",
+    icon: UserRound,
+    tone: "green"
   }
 ];
+
 
 const NOTIFICATION_TYPES = [
   {
-    value: "fee_reminder",
+    id: "fee_reminder",
     title: "Fee Reminder",
-    description: "Remind students about pending monthly fees.",
-    icon: BellRing
+    description:
+      "A friendly reminder about the monthly library fee.",
+    icon: FileText,
+    tone: "orange"
   },
   {
-    value: "announcement",
+    id: "announcement",
     title: "Announcement",
-    description: "Send an important library announcement.",
-    icon: Megaphone
+    description:
+      "Share an important update or message with students.",
+    icon: Megaphone,
+    tone: "brown"
   }
 ];
 
 
-// ============================================================
-// HELPERS
-// ============================================================
+/* =========================================================
+   HELPERS
+========================================================= */
 
-function formatDate(date) {
-  if (!date) {
+function getCurrentMonth() {
+  return new Date().getMonth() + 1;
+}
+
+
+function getCurrentYear() {
+  return new Date().getFullYear();
+}
+
+
+function formatDate(value) {
+  if (!value) {
     return "—";
   }
 
-  const parsedDate = new Date(date);
+  const date = new Date(value);
 
-  if (Number.isNaN(parsedDate.getTime())) {
+  if (Number.isNaN(date.getTime())) {
     return "—";
   }
 
-  return parsedDate.toLocaleDateString("en-IN", {
+  return date.toLocaleDateString("en-IN", {
     day: "2-digit",
     month: "short",
     year: "numeric"
   });
 }
 
-function formatDateTime(date) {
-  if (!date) {
+
+function formatDateTime(value) {
+  if (!value) {
     return "—";
   }
 
-  const parsedDate = new Date(date);
+  const date = new Date(value);
 
-  if (Number.isNaN(parsedDate.getTime())) {
+  if (Number.isNaN(date.getTime())) {
     return "—";
   }
 
-  return parsedDate.toLocaleString("en-IN", {
+  return date.toLocaleString("en-IN", {
     day: "2-digit",
     month: "short",
     year: "numeric",
@@ -125,223 +160,119 @@ function formatDateTime(date) {
   });
 }
 
-function formatNotificationType(type) {
-  if (type === "fee_reminder") {
-    return "Fee Reminder";
-  }
 
-  if (type === "announcement") {
-    return "Announcement";
-  }
-
-  return type || "Notification";
-}
-
-function formatAudience(audience) {
-  if (audience === "all_active") {
-    return "All Active";
-  }
-
-  if (audience === "unpaid") {
-    return "Unpaid Students";
-  }
-
-  if (audience === "selected") {
-    return "Selected Students";
-  }
-
-  return audience || "—";
-}
-
-function getStatusConfig(status) {
-  switch (status) {
-    case "sent":
-      return {
-        label: "Delivered",
-        className:
-          "border-emerald-200 bg-emerald-50 text-emerald-700",
-        icon: CheckCircle2
-      };
-
-    case "failed":
-      return {
-        label: "Failed",
-        className:
-          "border-red-200 bg-red-50 text-red-700",
-        icon: XCircle
-      };
-
-    case "queued":
-      return {
-        label: "Queued",
-        className:
-          "border-amber-200 bg-amber-50 text-amber-700",
-        icon: Clock3
-      };
-
-    default:
-      return {
-        label: status || "Unknown",
-        className:
-          "border-slate-200 bg-slate-50 text-slate-600",
-        icon: Info
-      };
-  }
+function getInitials(name = "") {
+  return name
+    .trim()
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((part) => part.charAt(0).toUpperCase())
+    .join("") || "S";
 }
 
 
-// ============================================================
-// SMALL UI COMPONENTS
-// ============================================================
+function getStatusInfo(notification) {
+  const status =
+    notification?.status ||
+    notification?.deliveryStatus ||
+    "";
 
-function StatCard({
-  icon: Icon,
-  label,
-  value,
-  description,
-  iconClassName,
-  loading
-}) {
+  const normalized =
+    String(status).toLowerCase();
+
+  if (
+    normalized === "sent" ||
+    normalized === "delivered" ||
+    normalized === "success"
+  ) {
+    return {
+      label: "Sent",
+      icon: CheckCircle2,
+      className:
+        "notification-status notification-status-success"
+    };
+  }
+
+  if (
+    normalized === "failed" ||
+    normalized === "error"
+  ) {
+    return {
+      label: "Failed",
+      icon: XCircle,
+      className:
+        "notification-status notification-status-failed"
+    };
+  }
+
+  return {
+    label:
+      normalized
+        ? String(status)
+            .charAt(0)
+            .toUpperCase() +
+          String(status).slice(1)
+        : "Queued",
+    icon: Clock3,
+    className:
+      "notification-status notification-status-pending"
+  };
+}
+
+
+function getNotificationDate(notification) {
   return (
-    <div className="group relative overflow-hidden rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_4px_20px_rgba(15,23,42,0.04)] transition duration-300 hover:-translate-y-0.5 hover:shadow-[0_12px_35px_rgba(15,23,42,0.08)] sm:p-6">
-      <div className="absolute right-0 top-0 h-24 w-24 translate-x-8 -translate-y-8 rounded-full bg-slate-50 transition duration-300 group-hover:scale-125" />
-
-      <div className="relative flex items-start justify-between gap-4">
-        <div>
-          <p className="text-xs font-bold uppercase tracking-[0.12em] text-slate-400">
-            {label}
-          </p>
-
-          {loading ? (
-            <div className="mt-3 h-9 w-20 animate-pulse rounded-lg bg-slate-100" />
-          ) : (
-            <p className="mt-2 text-3xl font-black tracking-tight text-slate-900 sm:text-4xl">
-              {value}
-            </p>
-          )}
-
-          <p className="mt-2 text-xs leading-5 text-slate-500">
-            {description}
-          </p>
-        </div>
-
-        <div
-          className={`relative flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl ${iconClassName}`}
-        >
-          <Icon className="h-5 w-5" />
-        </div>
-      </div>
-    </div>
+    notification?.createdAt ||
+    notification?.sentAt ||
+    notification?.updatedAt
   );
 }
 
 
-function SectionHeading({
-  eyebrow,
-  title,
-  description,
-  icon: Icon
-}) {
-  return (
-    <div className="mb-6 flex items-start gap-4">
-      <div className="hidden h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-orange-50 text-orange-600 sm:flex">
-        <Icon className="h-5 w-5" />
-      </div>
-
-      <div>
-        {eyebrow && (
-          <p className="mb-1 text-[11px] font-black uppercase tracking-[0.16em] text-orange-600">
-            {eyebrow}
-          </p>
-        )}
-
-        <h2 className="text-xl font-black tracking-tight text-slate-900 sm:text-2xl">
-          {title}
-        </h2>
-
-        {description && (
-          <p className="mt-1.5 max-w-2xl text-sm leading-6 text-slate-500">
-            {description}
-          </p>
-        )}
-      </div>
-    </div>
-  );
-}
-
-
-function FormLabel({ children, required }) {
-  return (
-    <label className="mb-2 block text-sm font-bold text-slate-800">
-      {children}
-
-      {required && (
-        <span className="ml-1 text-orange-600">
-          *
-        </span>
-      )}
-    </label>
-  );
-}
-
-
-function CustomSelect({
-  value,
-  onChange,
-  children,
-  disabled
-}) {
-  return (
-    <div className="relative">
-      <select
-        value={value}
-        onChange={onChange}
-        disabled={disabled}
-        className="h-12 w-full appearance-none rounded-xl border border-slate-200 bg-white px-4 pr-11 text-sm font-semibold text-slate-800 outline-none transition focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400"
-      >
-        {children}
-      </select>
-
-      <ChevronDown className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-    </div>
-  );
-}
-
-
-// ============================================================
-// MAIN COMPONENT
-// ============================================================
+/* =========================================================
+   COMPONENT
+========================================================= */
 
 export default function Notifications() {
-  // ----------------------------------------------------------
-  // PAGE DATA
-  // ----------------------------------------------------------
+  const navigate = useNavigate();
 
-  const [notifications, setNotifications] = useState([]);
-  const [students, setStudents] = useState([]);
 
-  const [stats, setStats] = useState({
-    total: 0,
-    sent: 0,
-    failed: 0,
-    queued: 0
-  });
+  /* -------------------------------------------------------
+     PAGE STATE
+  ------------------------------------------------------- */
 
-  // ----------------------------------------------------------
-  // LOADING STATES
-  // ----------------------------------------------------------
+  const [loading, setLoading] =
+    useState(true);
 
-  const [loading, setLoading] = useState(true);
-  const [studentsLoading, setStudentsLoading] =
+  const [refreshing, setRefreshing] =
     useState(false);
-  const [sending, setSending] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
 
-  // ----------------------------------------------------------
-  // FORM STATE
-  // ----------------------------------------------------------
+  const [sending, setSending] =
+    useState(false);
 
-  const currentDate = new Date();
+
+  /* -------------------------------------------------------
+     DATA STATE
+  ------------------------------------------------------- */
+
+  const [notifications, setNotifications] =
+    useState([]);
+
+  const [students, setStudents] =
+    useState([]);
+
+  const [stats, setStats] =
+    useState({
+      total: 0,
+      sent: 0,
+      failed: 0,
+      queued: 0
+    });
+
+
+  /* -------------------------------------------------------
+     COMPOSER STATE
+  ------------------------------------------------------- */
 
   const [audience, setAudience] =
     useState("all_active");
@@ -349,37 +280,35 @@ export default function Notifications() {
   const [type, setType] =
     useState("fee_reminder");
 
-  const [month, setMonth] =
-    useState(currentDate.getMonth() + 1);
-
-  const [year, setYear] =
-    useState(currentDate.getFullYear());
-
   const [title, setTitle] =
-    useState("");
+    useState("Monthly Library Fee Reminder");
 
   const [message, setMessage] =
-    useState("");
+    useState(
+      "Dear student, your monthly library fee is pending. Please contact the library operator to complete your payment."
+    );
 
-  const [selectedStudents, setSelectedStudents] =
-    useState([]);
+  const [month, setMonth] =
+    useState(getCurrentMonth());
 
-  // ----------------------------------------------------------
-  // SEARCH / FILTER STATE
-  // ----------------------------------------------------------
+  const [year, setYear] =
+    useState(getCurrentYear());
+
+
+  /* -------------------------------------------------------
+     STUDENT SELECTION
+  ------------------------------------------------------- */
 
   const [studentSearch, setStudentSearch] =
     useState("");
 
-  const [historySearch, setHistorySearch] =
-    useState("");
+  const [selectedStudentIds, setSelectedStudentIds] =
+    useState([]);
 
-  const [historyFilter, setHistoryFilter] =
-    useState("all");
 
-  // ----------------------------------------------------------
-  // UI STATE
-  // ----------------------------------------------------------
+  /* -------------------------------------------------------
+     UI STATE
+  ------------------------------------------------------- */
 
   const [error, setError] =
     useState("");
@@ -387,134 +316,316 @@ export default function Notifications() {
   const [success, setSuccess] =
     useState("");
 
-  // ==========================================================
-  // INITIAL DATA
-  // ==========================================================
+  const [historySearch, setHistorySearch] =
+    useState("");
 
-  useEffect(() => {
-    loadPageData();
-  }, []);
+  const [mobileHistoryOpen, setMobileHistoryOpen] =
+    useState(false);
 
-  useEffect(() => {
-    if (audience === "selected") {
-      loadStudents();
-    }
-  }, [audience]);
 
-  // ==========================================================
-  // API
-  // ==========================================================
+  /* =======================================================
+     LOAD DATA
+  ======================================================= */
 
-  async function loadPageData() {
-    setLoading(true);
-    setError("");
-
+  async function loadData(
+    showLoader = true
+  ) {
     try {
-      const [notificationsResponse, statsResponse] =
-        await Promise.all([
-          api.get("/notifications"),
-          api.get("/notifications/stats")
-        ]);
-
-      if (
-        !notificationsResponse.data?.success ||
-        !statsResponse.data?.success
-      ) {
-        throw new Error(
-          "Unable to load notification data."
-        );
+      if (showLoader) {
+        setLoading(true);
+      } else {
+        setRefreshing(true);
       }
 
+      setError("");
+
+      const [
+        notificationsResponse,
+        statsResponse,
+        studentsResponse
+      ] = await Promise.all([
+        api.get("/notifications"),
+        api.get("/notifications/stats"),
+        api.get("/students")
+      ]);
+
+
+      /* Notifications */
+
+      const notificationData =
+        notificationsResponse?.data?.notifications;
+
       setNotifications(
-        notificationsResponse.data.notifications || []
+        Array.isArray(notificationData)
+          ? notificationData
+          : []
       );
 
+
+      /* Stats */
+
       const statsData =
-        statsResponse.data.stats ||
-        statsResponse.data;
+        statsResponse?.data?.stats ||
+        statsResponse?.data ||
+        {};
 
       setStats({
         total:
-          statsData.total ??
-          statsData.totalNotifications ??
-          0,
+          Number(
+            statsData.total ??
+            statsData.totalNotifications ??
+            0
+          ),
 
         sent:
-          statsData.sent ??
-          statsData.delivered ??
-          0,
+          Number(
+            statsData.sent ??
+            statsData.successful ??
+            statsData.delivered ??
+            0
+          ),
 
         failed:
-          statsData.failed ??
-          0,
+          Number(
+            statsData.failed ??
+            0
+          ),
 
         queued:
-          statsData.queued ??
-          0
+          Number(
+            statsData.queued ??
+            0
+          )
       });
+
+
+      /* Students */
+
+      const studentData =
+        studentsResponse?.data?.students;
+
+      setStudents(
+        Array.isArray(studentData)
+          ? studentData
+          : []
+      );
     } catch (requestError) {
       console.error(
-        "Notification page error:",
+        "Failed to load notification data:",
         requestError
       );
 
       setError(
-        requestError.response?.data?.message ||
-          requestError.message ||
-          "Unable to load notifications."
+        requestError?.response?.data?.message ||
+          "Unable to load notification data. Please try again."
       );
     } finally {
       setLoading(false);
-    }
-  }
-
-
-  async function loadStudents() {
-    setStudentsLoading(true);
-
-    try {
-      const response =
-        await api.get("/students");
-
-      if (!response.data?.success) {
-        throw new Error(
-          "Unable to load students."
-        );
-      }
-
-      setStudents(
-        response.data.students || []
-      );
-    } catch (requestError) {
-      console.error(
-        "Load students error:",
-        requestError
-      );
-
-      setError(
-        requestError.response?.data?.message ||
-          requestError.message ||
-          "Unable to load students."
-      );
-    } finally {
-      setStudentsLoading(false);
-    }
-  }
-
-
-  async function refreshNotifications() {
-    setRefreshing(true);
-    setError("");
-
-    try {
-      await loadPageData();
-    } finally {
       setRefreshing(false);
     }
   }
 
 
-  async function handleSendNotification(
+  useEffect(() => {
+    loadData();
+  }, []);
+
+
+  /* =======================================================
+     DERIVED DATA
+  ======================================================= */
+
+  const selectedAudience = useMemo(
+    () =>
+      AUDIENCES.find(
+        (item) =>
+          item.id === audience
+      ) || AUDIENCES[0],
+    [audience]
+  );
+
+
+  const selectedType = useMemo(
+    () =>
+      NOTIFICATION_TYPES.find(
+        (item) =>
+          item.id === type
+      ) || NOTIFICATION_TYPES[0],
+    [type]
+  );
+
+
+  const filteredStudents = useMemo(() => {
+    const search =
+      studentSearch
+        .trim()
+        .toLowerCase();
+
+    const activeStudents =
+      students.filter(
+        (student) =>
+          student.enrollmentStatus ===
+          "active"
+      );
+
+    if (!search) {
+      return activeStudents;
+    }
+
+    return activeStudents.filter(
+      (student) =>
+        student.name
+          ?.toLowerCase()
+          .includes(search) ||
+        student.phoneNumber
+          ?.toLowerCase()
+          .includes(search) ||
+        student.seatNumber
+          ?.toLowerCase()
+          .includes(search)
+    );
+  }, [
+    students,
+    studentSearch
+  ]);
+
+
+  const filteredHistory = useMemo(() => {
+    const search =
+      historySearch
+        .trim()
+        .toLowerCase();
+
+    if (!search) {
+      return notifications;
+    }
+
+    return notifications.filter(
+      (notification) =>
+        notification.title
+          ?.toLowerCase()
+          .includes(search) ||
+        notification.message
+          ?.toLowerCase()
+          .includes(search) ||
+        notification.type
+          ?.toLowerCase()
+          .includes(search) ||
+        notification.status
+          ?.toLowerCase()
+          .includes(search)
+    );
+  }, [
+    notifications,
+    historySearch
+  ]);
+
+
+  const selectedCount =
+    selectedStudentIds.length;
+
+
+  /* =======================================================
+     STUDENT SELECTION HANDLERS
+  ======================================================= */
+
+  function toggleStudent(studentId) {
+    setSelectedStudentIds(
+      (current) => {
+        if (
+          current.includes(
+            studentId
+          )
+        ) {
+          return current.filter(
+            (id) =>
+              id !== studentId
+          );
+        }
+
+        return [
+          ...current,
+          studentId
+        ];
+      }
+    );
+  }
+
+
+  function selectAllVisibleStudents() {
+    const visibleIds =
+      filteredStudents.map(
+        (student) =>
+          student._id
+      );
+
+    setSelectedStudentIds(
+      (current) => {
+        const combined = new Set([
+          ...current,
+          ...visibleIds
+        ]);
+
+        return Array.from(
+          combined
+        );
+      }
+    );
+  }
+
+
+  function clearSelectedStudents() {
+    setSelectedStudentIds([]);
+  }
+
+
+  /* =======================================================
+     FORM HANDLERS
+  ======================================================= */
+
+  function handleAudienceChange(
+    nextAudience
+  ) {
+    setAudience(nextAudience);
+
+    if (
+      nextAudience !==
+      "selected"
+    ) {
+      setSelectedStudentIds([]);
+    }
+  }
+
+
+  function handleTypeChange(
+    nextType
+  ) {
+    setType(nextType);
+
+    if (
+      nextType ===
+      "fee_reminder"
+    ) {
+      setTitle(
+        "Monthly Library Fee Reminder"
+      );
+
+      setMessage(
+        "Dear student, your monthly library fee is pending. Please contact the library operator to complete your payment."
+      );
+    } else {
+      setTitle(
+        "Important Library Announcement"
+      );
+
+      setMessage(
+        "Dear student, we have an important update from Shri Krishna Digital Library. Please check the latest information from the library operator."
+      );
+    }
+  }
+
+
+  async function handleSubmit(
     event
   ) {
     event.preventDefault();
@@ -522,73 +633,74 @@ export default function Notifications() {
     setError("");
     setSuccess("");
 
-    // --------------------------------------------
-    // Frontend validation
-    // --------------------------------------------
 
     if (!title.trim()) {
       setError(
         "Please enter a notification title."
       );
-
       return;
     }
+
 
     if (!message.trim()) {
       setError(
         "Please enter a notification message."
       );
-
       return;
     }
 
-    if (
-      type === "fee_reminder" &&
-      (!month || !year)
-    ) {
-      setError(
-        "Please select the month and year for the fee reminder."
-      );
-
-      return;
-    }
 
     if (
-      audience === "selected" &&
-      selectedStudents.length === 0
+      audience ===
+        "selected" &&
+      selectedStudentIds.length === 0
     ) {
       setError(
         "Please select at least one student."
       );
-
       return;
     }
 
-    // --------------------------------------------
-    // Preserve existing backend payload contract
-    // --------------------------------------------
 
-    const payload = {
-      audience,
-      type,
-      title: title.trim(),
-      message: message.trim(),
-      month:
-        type === "fee_reminder"
-          ? Number(month)
-          : undefined,
-      year:
-        type === "fee_reminder"
-          ? Number(year)
-          : undefined,
-      studentIds:
-        audience === "selected"
-          ? selectedStudents
-          : undefined
-    };
+    if (
+      type ===
+        "fee_reminder" &&
+      (!month || !year)
+    ) {
+      setError(
+        "Please select the fee month and year."
+      );
+      return;
+    }
+
 
     try {
       setSending(true);
+
+      const payload = {
+        audience,
+        type,
+        title:
+          title.trim(),
+        message:
+          message.trim(),
+        month:
+          type ===
+          "fee_reminder"
+            ? Number(month)
+            : undefined,
+        year:
+          type ===
+          "fee_reminder"
+            ? Number(year)
+            : undefined,
+        studentIds:
+          audience ===
+          "selected"
+            ? selectedStudentIds
+            : []
+      };
+
 
       const response =
         await api.post(
@@ -596,15 +708,15 @@ export default function Notifications() {
           payload
         );
 
-      if (!response.data?.success) {
-        throw new Error(
-          response.data?.message ||
-            "Failed to send notification."
-        );
-      }
 
       const result =
-        response.data;
+        response?.data || {};
+
+
+      const targeted =
+        result.targeted ??
+        result.targetedCount ??
+        0;
 
       const successful =
         result.successful ??
@@ -616,44 +728,42 @@ export default function Notifications() {
         result.failed ??
         0;
 
-      const targeted =
-        result.targeted ??
-        result.targetedCount ??
-        0;
 
       setSuccess(
-        `Notification sent successfully. ${targeted} student${
-          targeted === 1 ? "" : "s"
-        } targeted${
-          successful
-            ? `, ${successful} delivered`
-            : ""
-        }${
-          failed
-            ? `, ${failed} failed`
-            : ""
-        }.`
+        `Notification sent successfully to ${successful || targeted} student${(successful || targeted) === 1 ? "" : "s"}.`
       );
 
-      // --------------------------------------------
-      // Reset message fields only.
-      // Keep audience/type/month/year for convenience.
-      // --------------------------------------------
 
-      setTitle("");
-      setMessage("");
-      setSelectedStudents([]);
+      /*
+       * Refresh notification history
+       * without showing the full page loader.
+       */
+      await loadData(false);
 
-      // --------------------------------------------
-      // Refresh backend data.
-      // --------------------------------------------
 
-      await loadPageData();
+      /*
+       * Clear selected students after
+       * a successful selected-audience send.
+       */
+      if (
+        audience ===
+        "selected"
+      ) {
+        setSelectedStudentIds([]);
+      }
 
-      window.scrollTo({
-        top: 0,
-        behavior: "smooth"
-      });
+
+      /*
+       * Keep the form usable for another
+       * notification.
+       */
+      if (
+        failed > 0
+      ) {
+        setSuccess(
+          `Notification processed. ${successful} sent successfully and ${failed} failed.`
+        );
+      }
     } catch (requestError) {
       console.error(
         "Send notification error:",
@@ -661,9 +771,8 @@ export default function Notifications() {
       );
 
       setError(
-        requestError.response?.data?.message ||
-          requestError.message ||
-          "Unable to send notification."
+        requestError?.response?.data?.message ||
+          "Unable to send notification. Please try again."
       );
     } finally {
       setSending(false);
@@ -671,1490 +780,1583 @@ export default function Notifications() {
   }
 
 
-  // ==========================================================
-  // STUDENT SELECTION
-  // ==========================================================
+  /* =======================================================
+     LOGOUT
+  ======================================================= */
 
-  const filteredStudents =
-    useMemo(() => {
-      const search =
-        studentSearch
-          .trim()
-          .toLowerCase();
+  function handleLogout() {
+    localStorage.removeItem(
+      "adminToken"
+    );
 
-      if (!search) {
-        return students;
+    localStorage.removeItem(
+      "admin"
+    );
+
+    navigate(
+      "/admin/login",
+      {
+        replace: true
       }
-
-      return students.filter(
-        (student) => {
-          const name =
-            student.name?.toLowerCase() || "";
-
-          const phone =
-            student.phoneNumber?.toLowerCase() ||
-            "";
-
-          const seat =
-            student.seatNumber?.toLowerCase() ||
-            "";
-
-          return (
-            name.includes(search) ||
-            phone.includes(search) ||
-            seat.includes(search)
-          );
-        }
-      );
-    }, [students, studentSearch]);
-
-
-  function toggleStudent(studentId) {
-    setSelectedStudents(
-      (current) =>
-        current.includes(studentId)
-          ? current.filter(
-              (id) => id !== studentId
-            )
-          : [...current, studentId]
     );
   }
 
 
-  function selectAllFilteredStudents() {
-    const ids =
-      filteredStudents.map(
-        (student) => student._id
-      );
+  /* =======================================================
+     LOADING
+  ======================================================= */
 
-    setSelectedStudents(
-      (current) => [
-        ...new Set([
-          ...current,
-          ...ids
-        ])
-      ]
-    );
-  }
-
-
-  function clearSelectedStudents() {
-    setSelectedStudents([]);
-  }
-
-
-  // ==========================================================
-  // HISTORY FILTER
-  // ==========================================================
-
-  const filteredNotifications =
-    useMemo(() => {
-      const search =
-        historySearch
-          .trim()
-          .toLowerCase();
-
-      return notifications.filter(
-        (notification) => {
-          const matchesStatus =
-            historyFilter === "all" ||
-            notification.status ===
-              historyFilter;
-
-          if (!matchesStatus) {
-            return false;
-          }
-
-          if (!search) {
-            return true;
-          }
-
-          const titleText =
-            notification.title?.toLowerCase() ||
-            "";
-
-          const messageText =
-            notification.message?.toLowerCase() ||
-            "";
-
-          const typeText =
-            notification.type?.toLowerCase() ||
-            "";
-
-          return (
-            titleText.includes(search) ||
-            messageText.includes(search) ||
-            typeText.includes(search)
-          );
-        }
-      );
-    }, [
-      notifications,
-      historySearch,
-      historyFilter
-    ]);
-
-
-  // ==========================================================
-  // YEAR OPTIONS
-  // ==========================================================
-
-  const yearOptions =
-    useMemo(() => {
-      const currentYear =
-        new Date().getFullYear();
-
-      return Array.from(
-        { length: 5 },
-        (_, index) =>
-          currentYear - index
-      );
-    }, []);
-
-
-  // ==========================================================
-  // FORM PREVIEW
-  // ==========================================================
-
-  const selectedAudience =
-    AUDIENCES.find(
-      (item) =>
-        item.value === audience
-    );
-
-  const selectedType =
-    NOTIFICATION_TYPES.find(
-      (item) =>
-        item.value === type
-    );
-
-  const PreviewIcon =
-    selectedType?.icon || Bell;
-
-
-  // ==========================================================
-  // RENDER
-  // ==========================================================
-
-  return (
-    <div className="min-h-screen bg-[#f7f8fa] text-slate-900">
-      {/* =====================================================
-          TOP HEADER
-      ====================================================== */}
-
-      <header className="sticky top-0 z-40 border-b border-slate-200/80 bg-white/95 backdrop-blur-xl">
-        <div className="mx-auto flex max-w-[1600px] items-center justify-between gap-4 px-4 py-3.5 sm:px-6 lg:px-8">
-          {/* Brand */}
-
-          <div className="flex min-w-0 items-center gap-3">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-orange-500 to-amber-500 text-white shadow-lg shadow-orange-500/20">
-              <Bell className="h-5 w-5" />
-            </div>
-
-            <div className="min-w-0">
-              <p className="truncate text-sm font-black text-slate-900 sm:text-base">
-                Shri Krishna Digital Library
-              </p>
-
-              <p className="hidden text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400 sm:block">
-                Admin Communication Center
-              </p>
-            </div>
+  if (loading) {
+    return (
+      <div className="notifications-page">
+        <div className="notifications-loading">
+          <div className="notifications-loading-icon">
+            <Loader2 className="h-7 w-7 animate-spin" />
           </div>
 
-          {/* Header actions */}
+          <h2>
+            Preparing your communication center
+          </h2>
 
-          <div className="flex shrink-0 items-center gap-2">
+          <p>
+            Loading students and notification history...
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+
+  /* =======================================================
+     RENDER
+  ======================================================= */
+
+  const AudienceIcon =
+    selectedAudience?.icon ||
+    Users;
+
+
+  return (
+    <div className="notifications-page">
+      {/* ===================================================
+          TOP NAVIGATION
+      =================================================== */}
+
+      <header className="notifications-nav">
+        <div className="notifications-nav-inner">
+
+          <Link
+            to="/admin/dashboard"
+            className="notifications-brand"
+          >
+            <span className="notifications-brand-mark">
+              <Sparkles className="h-5 w-5" />
+            </span>
+
+            <span>
+              <strong>
+                SHRI KRISHNA
+              </strong>
+
+              <small>
+                DIGITAL LIBRARY
+              </small>
+            </span>
+          </Link>
+
+
+          <div className="notifications-nav-right">
+
             <Link
               to="/admin/dashboard"
-              className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-700 transition hover:border-orange-200 hover:bg-orange-50 hover:text-orange-700 sm:px-4"
+              className="notifications-back-link"
             >
               <ArrowLeft className="h-4 w-4" />
 
-              <span className="hidden sm:inline">
+              <span>
                 Dashboard
               </span>
             </Link>
 
+
             <button
               type="button"
-              onClick={refreshNotifications}
-              disabled={
-                refreshing ||
-                loading
-              }
-              title="Refresh notifications"
-              className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 transition hover:border-orange-200 hover:bg-orange-50 hover:text-orange-600 disabled:cursor-not-allowed disabled:opacity-50"
+              onClick={handleLogout}
+              className="notifications-logout"
             >
-              <RefreshCw
-                className={`h-4 w-4 ${
-                  refreshing
-                    ? "animate-spin"
-                    : ""
-                }`}
-              />
+              Logout
             </button>
+
           </div>
         </div>
       </header>
 
 
-      {/* =====================================================
-          MAIN CONTENT
-      ====================================================== */}
+      <main>
 
-      <main className="mx-auto max-w-[1600px] px-4 py-6 sm:px-6 sm:py-8 lg:px-8 lg:py-10">
-        {/* ===================================================
-            PAGE HERO
-        ==================================================== */}
+        {/* =================================================
+            HERO
+        ================================================= */}
 
-        <section className="relative mb-7 overflow-hidden rounded-3xl bg-slate-950 p-6 text-white shadow-[0_18px_50px_rgba(15,23,42,0.16)] sm:p-8 lg:p-10">
-          {/* Decorative shapes */}
+        <section className="notifications-hero-section">
+          <div className="notifications-container">
 
-          <div className="absolute -right-24 -top-24 h-72 w-72 rounded-full bg-orange-500/20 blur-3xl" />
+            <div className="notifications-hero">
 
-          <div className="absolute -bottom-28 left-1/3 h-72 w-72 rounded-full bg-amber-400/10 blur-3xl" />
+              <div className="notifications-hero-copy">
 
-          <div className="relative grid gap-8 lg:grid-cols-[1fr_auto] lg:items-end">
-            <div className="max-w-3xl">
-              <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/10 px-3 py-1.5 text-[11px] font-black uppercase tracking-[0.15em] text-orange-300">
-                <Sparkles className="h-3.5 w-3.5" />
-                Communication Center
+                <div className="notifications-eyebrow">
+                  <span className="notifications-eyebrow-icon">
+                    <Bell className="h-4 w-4" />
+                  </span>
+
+                  COMMUNICATION CENTER
+                </div>
+
+
+                <h1>
+                  Stay connected.
+                  <br />
+
+                  <span>
+                    Keep students informed.
+                  </span>
+                </h1>
+
+
+                <p>
+                  Send thoughtful fee reminders and
+                  important library announcements
+                  directly to your students.
+                </p>
+
+
+                <div className="notifications-hero-meta">
+
+                  <div>
+                    <Check className="h-4 w-4" />
+
+                    <span>
+                      Manual control
+                    </span>
+                  </div>
+
+                  <div>
+                    <Check className="h-4 w-4" />
+
+                    <span>
+                      Firebase notifications
+                    </span>
+                  </div>
+
+                  <div>
+                    <Check className="h-4 w-4" />
+
+                    <span>
+                      Student focused
+                    </span>
+                  </div>
+
+                </div>
+
               </div>
 
-              <h1 className="max-w-2xl text-3xl font-black tracking-tight sm:text-4xl lg:text-5xl">
-                Keep students informed,
-                <span className="text-orange-400">
-                  {" "}
-                  instantly.
-                </span>
-              </h1>
 
-              <p className="mt-4 max-w-2xl text-sm leading-7 text-slate-300 sm:text-base">
-                Send targeted fee reminders and
-                important library announcements
-                directly to students through the
-                notification system.
-              </p>
+              <div className="notifications-hero-visual">
+
+                <div className="notifications-orbit notifications-orbit-one" />
+                <div className="notifications-orbit notifications-orbit-two" />
+
+                <div className="notifications-hero-card">
+
+                  <div className="notifications-hero-card-top">
+                    <span>
+                      SHRI KRISHNA
+                    </span>
+
+                    <span className="notifications-open-badge">
+                      <span />
+                      LIVE
+                    </span>
+                  </div>
+
+
+                  <div className="notifications-hero-card-icon">
+                    <BellRing className="h-8 w-8" />
+                  </div>
+
+
+                  <h2>
+                    Your message
+                    <br />
+                    matters.
+                  </h2>
+
+
+                  <p>
+                    Reach the right students
+                    with the right information.
+                  </p>
+
+
+                  <div className="notifications-hero-card-bottom">
+
+                    <div>
+                      <Users className="h-4 w-4" />
+                      <span>
+                        {students.filter(
+                          (student) =>
+                            student.enrollmentStatus ===
+                            "active"
+                        ).length}{" "}
+                        active students
+                      </span>
+                    </div>
+
+                    <div>
+                      <Bell className="h-4 w-4" />
+                      <span>
+                        Push enabled
+                      </span>
+                    </div>
+
+                  </div>
+
+                </div>
+
+
+                <div className="notifications-floating-card notifications-floating-one">
+                  <span className="notifications-floating-icon">
+                    <Send className="h-4 w-4" />
+                  </span>
+
+                  <span>
+                    <strong>
+                      Quick delivery
+                    </strong>
+
+                    <small>
+                      Send in seconds
+                    </small>
+                  </span>
+                </div>
+
+
+                <div className="notifications-floating-card notifications-floating-two">
+                  <span className="notifications-floating-icon green">
+                    <CheckCircle2 className="h-4 w-4" />
+                  </span>
+
+                  <span>
+                    <strong>
+                      Student friendly
+                    </strong>
+
+                    <small>
+                      Clear & simple messages
+                    </small>
+                  </span>
+                </div>
+
+              </div>
+
             </div>
 
-            <div className="hidden rounded-2xl border border-white/10 bg-white/5 p-5 lg:block">
-              <div className="flex items-center gap-3">
-                <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-orange-500/20 text-orange-300">
-                  <Send className="h-5 w-5" />
+          </div>
+        </section>
+
+
+        {/* =================================================
+            MAIN CONTENT
+        ================================================= */}
+
+        <section className="notifications-main-section">
+          <div className="notifications-container">
+
+            {/* =============================================
+                STATS
+            ============================================= */}
+
+            <div className="notifications-stats-grid">
+
+              <div className="notification-stat-card">
+                <div className="notification-stat-icon orange">
+                  <Bell className="h-5 w-5" />
                 </div>
 
                 <div>
-                  <p className="text-xs font-bold uppercase tracking-wider text-slate-400">
-                    Delivery
-                  </p>
-
-                  <p className="mt-1 text-sm font-bold text-white">
-                    Manual & controlled
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </section>
-
-
-        {/* ===================================================
-            ALERTS
-        ==================================================== */}
-
-        {error && (
-          <div className="mb-6 flex items-start gap-3 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 shadow-sm">
-            <AlertCircle className="mt-0.5 h-5 w-5 shrink-0" />
-
-            <div className="min-w-0 flex-1">
-              <p className="font-bold">
-                Something went wrong
-              </p>
-
-              <p className="mt-1 leading-6">
-                {error}
-              </p>
-            </div>
-
-            <button
-              type="button"
-              onClick={() => setError("")}
-              className="rounded-lg p-1 text-red-500 transition hover:bg-red-100"
-              aria-label="Dismiss error"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          </div>
-        )}
-
-        {success && (
-          <div className="mb-6 flex items-start gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-700 shadow-sm">
-            <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0" />
-
-            <div className="min-w-0 flex-1">
-              <p className="font-bold">
-                Notification sent
-              </p>
-
-              <p className="mt-1 leading-6">
-                {success}
-              </p>
-            </div>
-
-            <button
-              type="button"
-              onClick={() => setSuccess("")}
-              className="rounded-lg p-1 text-emerald-600 transition hover:bg-emerald-100"
-              aria-label="Dismiss success"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          </div>
-        )}
-
-
-        {/* ===================================================
-            STATISTICS
-        ==================================================== */}
-
-        <section className="mb-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <StatCard
-            icon={Bell}
-            label="Total Notifications"
-            value={stats.total}
-            description="Notifications recorded in the system"
-            iconClassName="bg-orange-50 text-orange-600"
-            loading={loading}
-          />
-
-          <StatCard
-            icon={CheckCircle2}
-            label="Delivered"
-            value={stats.sent}
-            description="Successfully delivered notifications"
-            iconClassName="bg-emerald-50 text-emerald-600"
-            loading={loading}
-          />
-
-          <StatCard
-            icon={XCircle}
-            label="Failed"
-            value={stats.failed}
-            description="Notifications that could not be delivered"
-            iconClassName="bg-red-50 text-red-600"
-            loading={loading}
-          />
-
-          <StatCard
-            icon={Clock3}
-            label="Queued"
-            value={stats.queued}
-            description="Notifications currently awaiting delivery"
-            iconClassName="bg-amber-50 text-amber-600"
-            loading={loading}
-          />
-        </section>
-
-
-        {/* ===================================================
-            SEND + PREVIEW
-        ==================================================== */}
-
-        <section className="grid items-start gap-6 xl:grid-cols-[minmax(0,1.55fr)_minmax(360px,0.8fr)]">
-          {/* =================================================
-              SEND FORM
-          ================================================== */}
-
-          <form
-            onSubmit={
-              handleSendNotification
-            }
-            className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-[0_8px_35px_rgba(15,23,42,0.05)]"
-          >
-            <div className="border-b border-slate-100 px-5 py-6 sm:px-7">
-              <SectionHeading
-                eyebrow="Create notification"
-                title="Compose a message"
-                description="Choose your audience, define the message type, and send a polished notification to students."
-                icon={Send}
-              />
-
-              {/* -------------------------------------------
-                  AUDIENCE
-              -------------------------------------------- */}
-
-              <div>
-                <FormLabel required>
-                  Who should receive this?
-                </FormLabel>
-
-                <div className="grid gap-3 md:grid-cols-3">
-                  {AUDIENCES.map(
-                    (item) => {
-                      const Icon =
-                        item.icon;
-
-                      const active =
-                        audience ===
-                        item.value;
-
-                      return (
-                        <button
-                          key={
-                            item.value
-                          }
-                          type="button"
-                          onClick={() =>
-                            setAudience(
-                              item.value
-                            )
-                          }
-                          disabled={
-                            sending
-                          }
-                          className={`group relative overflow-hidden rounded-2xl border p-4 text-left transition duration-200 ${
-                            active
-                              ? "border-orange-500 bg-orange-50/70 shadow-[0_8px_25px_rgba(249,115,22,0.10)]"
-                              : "border-slate-200 bg-white hover:border-orange-200 hover:bg-orange-50/30"
-                          }`}
-                        >
-                          {active && (
-                            <div className="absolute right-3 top-3 flex h-5 w-5 items-center justify-center rounded-full bg-orange-500 text-white">
-                              <Check className="h-3 w-3" />
-                            </div>
-                          )}
-
-                          <div
-                            className={`mb-4 flex h-10 w-10 items-center justify-center rounded-xl ${
-                              active
-                                ? "bg-orange-500 text-white"
-                                : "bg-slate-100 text-slate-500 group-hover:bg-orange-100 group-hover:text-orange-600"
-                            }`}
-                          >
-                            <Icon className="h-4.5 w-4.5" />
-                          </div>
-
-                          <p className="pr-5 text-sm font-black text-slate-900">
-                            {item.title}
-                          </p>
-
-                          <p className="mt-1.5 text-xs leading-5 text-slate-500">
-                            {item.description}
-                          </p>
-                        </button>
-                      );
-                    }
-                  )}
-                </div>
-              </div>
-
-
-              {/* -------------------------------------------
-                  SELECTED STUDENTS
-              -------------------------------------------- */}
-
-              {audience ===
-                "selected" && (
-                <div className="mt-7 rounded-2xl border border-slate-200 bg-slate-50/70 p-4 sm:p-5">
-                  <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <div>
-                      <p className="text-sm font-black text-slate-900">
-                        Select students
-                      </p>
-
-                      <p className="mt-1 text-xs text-slate-500">
-                        {selectedStudents.length}{" "}
-                        selected
-                      </p>
-                    </div>
-
-                    <div className="flex gap-2">
-                      <button
-                        type="button"
-                        onClick={
-                          selectAllFilteredStudents
-                        }
-                        disabled={
-                          studentsLoading ||
-                          filteredStudents.length ===
-                            0
-                        }
-                        className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 transition hover:border-orange-200 hover:text-orange-600 disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        Select visible
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={
-                          clearSelectedStudents
-                        }
-                        disabled={
-                          selectedStudents.length ===
-                          0
-                        }
-                        className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-500 transition hover:border-red-200 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        Clear
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="relative mb-4">
-                    <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-
-                    <input
-                      type="search"
-                      value={
-                        studentSearch
-                      }
-                      onChange={(event) =>
-                        setStudentSearch(
-                          event.target.value
-                        )
-                      }
-                      placeholder="Search by name, mobile or seat..."
-                      className="h-11 w-full rounded-xl border border-slate-200 bg-white pl-10 pr-4 text-sm outline-none transition focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10"
-                    />
-                  </div>
-
-                  <div className="max-h-[330px] overflow-y-auto rounded-xl border border-slate-200 bg-white">
-                    {studentsLoading ? (
-                      <div className="flex min-h-[180px] items-center justify-center">
-                        <div className="text-center">
-                          <Loader2 className="mx-auto h-6 w-6 animate-spin text-orange-500" />
-
-                          <p className="mt-3 text-xs font-semibold text-slate-500">
-                            Loading students...
-                          </p>
-                        </div>
-                      </div>
-                    ) : filteredStudents.length ===
-                      0 ? (
-                      <div className="px-5 py-12 text-center">
-                        <Users className="mx-auto h-8 w-8 text-slate-300" />
-
-                        <p className="mt-3 text-sm font-bold text-slate-700">
-                          No students found
-                        </p>
-
-                        <p className="mt-1 text-xs text-slate-400">
-                          Try another search.
-                        </p>
-                      </div>
-                    ) : (
-                      <div className="divide-y divide-slate-100">
-                        {filteredStudents.map(
-                          (student) => {
-                            const selected =
-                              selectedStudents.includes(
-                                student._id
-                              );
-
-                            return (
-                              <button
-                                key={
-                                  student._id
-                                }
-                                type="button"
-                                onClick={() =>
-                                  toggleStudent(
-                                    student._id
-                                  )
-                                }
-                                className={`flex w-full items-center gap-3 px-4 py-3 text-left transition ${
-                                  selected
-                                    ? "bg-orange-50"
-                                    : "hover:bg-slate-50"
-                                }`}
-                              >
-                                <div
-                                  className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-black ${
-                                    selected
-                                      ? "bg-orange-500 text-white"
-                                      : "bg-slate-100 text-slate-600"
-                                  }`}
-                                >
-                                  {student.name
-                                    ?.charAt(
-                                      0
-                                    )
-                                    ?.toUpperCase() ||
-                                    "S"}
-                                </div>
-
-                                <div className="min-w-0 flex-1">
-                                  <p className="truncate text-sm font-bold text-slate-900">
-                                    {student.name ||
-                                      "Unnamed student"}
-                                  </p>
-
-                                  <p className="mt-0.5 truncate text-xs text-slate-500">
-                                    {student.phoneNumber ||
-                                      "No mobile"}{" "}
-                                    • Seat{" "}
-                                    {student.seatNumber ||
-                                      "—"}
-                                  </p>
-                                </div>
-
-                                <div
-                                  className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border ${
-                                    selected
-                                      ? "border-orange-500 bg-orange-500 text-white"
-                                      : "border-slate-300 bg-white"
-                                  }`}
-                                >
-                                  {selected && (
-                                    <Check className="h-3.5 w-3.5" />
-                                  )}
-                                </div>
-                              </button>
-                            );
-                          }
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-
-
-              {/* -------------------------------------------
-                  TYPE
-              -------------------------------------------- */}
-
-              <div className="mt-7">
-                <FormLabel required>
-                  Notification type
-                </FormLabel>
-
-                <div className="grid gap-3 sm:grid-cols-2">
-                  {NOTIFICATION_TYPES.map(
-                    (item) => {
-                      const Icon =
-                        item.icon;
-
-                      const active =
-                        type ===
-                        item.value;
-
-                      return (
-                        <button
-                          key={
-                            item.value
-                          }
-                          type="button"
-                          onClick={() =>
-                            setType(
-                              item.value
-                            )
-                          }
-                          disabled={
-                            sending
-                          }
-                          className={`flex items-start gap-3 rounded-2xl border p-4 text-left transition ${
-                            active
-                              ? "border-orange-500 bg-orange-50/70"
-                              : "border-slate-200 bg-white hover:border-orange-200"
-                          }`}
-                        >
-                          <div
-                            className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${
-                              active
-                                ? "bg-orange-500 text-white"
-                                : "bg-slate-100 text-slate-500"
-                            }`}
-                          >
-                            <Icon className="h-4.5 w-4.5" />
-                          </div>
-
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-center justify-between gap-2">
-                              <p className="text-sm font-black text-slate-900">
-                                {item.title}
-                              </p>
-
-                              {active && (
-                                <Check className="h-4 w-4 shrink-0 text-orange-600" />
-                              )}
-                            </div>
-
-                            <p className="mt-1 text-xs leading-5 text-slate-500">
-                              {item.description}
-                            </p>
-                          </div>
-                        </button>
-                      );
-                    }
-                  )}
-                </div>
-              </div>
-
-
-              {/* -------------------------------------------
-                  MONTH / YEAR
-              -------------------------------------------- */}
-
-              {type ===
-                "fee_reminder" && (
-                <div className="mt-7 rounded-2xl border border-orange-100 bg-orange-50/60 p-4 sm:p-5">
-                  <div className="mb-4 flex items-start gap-3">
-                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-orange-100 text-orange-600">
-                      <CalendarDays className="h-4 w-4" />
-                    </div>
-
-                    <div>
-                      <p className="text-sm font-black text-slate-900">
-                        Fee period
-                      </p>
-
-                      <p className="mt-1 text-xs leading-5 text-slate-500">
-                        Select the month this reminder
-                        refers to.
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <div>
-                      <FormLabel required>
-                        Month
-                      </FormLabel>
-
-                      <CustomSelect
-                        value={
-                          month
-                        }
-                        onChange={(event) =>
-                          setMonth(
-                            Number(
-                              event.target
-                                .value
-                            )
-                          )
-                        }
-                        disabled={
-                          sending
-                        }
-                      >
-                        {MONTHS.map(
-                          (
-                            monthOption
-                          ) => (
-                            <option
-                              key={
-                                monthOption.value
-                              }
-                              value={
-                                monthOption.value
-                              }
-                            >
-                              {
-                                monthOption.label
-                              }
-                            </option>
-                          )
-                        )}
-                      </CustomSelect>
-                    </div>
-
-                    <div>
-                      <FormLabel required>
-                        Year
-                      </FormLabel>
-
-                      <CustomSelect
-                        value={year}
-                        onChange={(event) =>
-                          setYear(
-                            Number(
-                              event.target
-                                .value
-                            )
-                          )
-                        }
-                        disabled={
-                          sending
-                        }
-                      >
-                        {yearOptions.map(
-                          (
-                            yearOption
-                          ) => (
-                            <option
-                              key={
-                                yearOption
-                              }
-                              value={
-                                yearOption
-                              }
-                            >
-                              {
-                                yearOption
-                              }
-                            </option>
-                          )
-                        )}
-                      </CustomSelect>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-
-              {/* -------------------------------------------
-                  TITLE
-              -------------------------------------------- */}
-
-              <div className="mt-7">
-                <div className="flex items-center justify-between gap-3">
-                  <FormLabel required>
-                    Notification title
-                  </FormLabel>
-
-                  <span className="mb-2 text-[11px] font-semibold text-slate-400">
-                    {title.length}/80
-                  </span>
-                </div>
-
-                <input
-                  type="text"
-                  maxLength={80}
-                  value={title}
-                  onChange={(event) =>
-                    setTitle(
-                      event.target.value
-                    )
-                  }
-                  placeholder={
-                    type ===
-                    "fee_reminder"
-                      ? "Monthly fee reminder"
-                      : "Important library announcement"
-                  }
-                  disabled={sending}
-                  className="h-12 w-full rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10 disabled:bg-slate-50"
-                />
-              </div>
-
-
-              {/* -------------------------------------------
-                  MESSAGE
-              -------------------------------------------- */}
-
-              <div className="mt-6">
-                <div className="flex items-center justify-between gap-3">
-                  <FormLabel required>
-                    Message
-                  </FormLabel>
-
-                  <span className="mb-2 text-[11px] font-semibold text-slate-400">
-                    {message.length}/500
-                  </span>
-                </div>
-
-                <textarea
-                  maxLength={500}
-                  rows={6}
-                  value={message}
-                  onChange={(event) =>
-                    setMessage(
-                      event.target.value
-                    )
-                  }
-                  placeholder={
-                    type ===
-                    "fee_reminder"
-                      ? "Please clear your monthly library fee for the selected month."
-                      : "Write your important announcement here..."
-                  }
-                  disabled={sending}
-                  className="w-full resize-none rounded-xl border border-slate-200 bg-white px-4 py-3.5 text-sm font-medium leading-6 text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10 disabled:bg-slate-50"
-                />
-              </div>
-
-
-              {/* -------------------------------------------
-                  FOOTER ACTION
-              -------------------------------------------- */}
-
-              <div className="mt-7 flex flex-col-reverse gap-3 border-t border-slate-100 pt-6 sm:flex-row sm:items-center sm:justify-between">
-                <div className="flex items-start gap-2 text-xs leading-5 text-slate-500">
-                  <Info className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" />
-
                   <span>
-                    Notifications are sent manually by
-                    the library operator.
+                    Total notifications
                   </span>
+
+                  <strong>
+                    {stats.total}
+                  </strong>
                 </div>
+              </div>
+
+
+              <div className="notification-stat-card">
+                <div className="notification-stat-icon green">
+                  <CheckCircle2 className="h-5 w-5" />
+                </div>
+
+                <div>
+                  <span>
+                    Successfully sent
+                  </span>
+
+                  <strong>
+                    {stats.sent}
+                  </strong>
+                </div>
+              </div>
+
+
+              <div className="notification-stat-card">
+                <div className="notification-stat-icon brown">
+                  <Clock3 className="h-5 w-5" />
+                </div>
+
+                <div>
+                  <span>
+                    Queued
+                  </span>
+
+                  <strong>
+                    {stats.queued}
+                  </strong>
+                </div>
+              </div>
+
+
+              <div className="notification-stat-card">
+                <div className="notification-stat-icon red">
+                  <XCircle className="h-5 w-5" />
+                </div>
+
+                <div>
+                  <span>
+                    Failed
+                  </span>
+
+                  <strong>
+                    {stats.failed}
+                  </strong>
+                </div>
+              </div>
+
+            </div>
+
+
+            {/* =============================================
+                FEEDBACK
+            ============================================= */}
+
+            {error && (
+              <div className="notification-alert notification-alert-error">
+                <XCircle className="h-5 w-5 shrink-0" />
+
+                <span>
+                  {error}
+                </span>
 
                 <button
-                  type="submit"
-                  disabled={sending}
-                  className="inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 px-6 text-sm font-black text-white shadow-lg shadow-orange-500/20 transition duration-200 hover:-translate-y-0.5 hover:shadow-xl hover:shadow-orange-500/25 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0 sm:min-w-[180px]"
+                  type="button"
+                  onClick={() =>
+                    setError("")
+                  }
+                  aria-label="Close error"
                 >
-                  {sending ? (
-                    <>
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      Sending...
-                    </>
-                  ) : (
-                    <>
-                      <Send className="h-4 w-4" />
-                      Send Notification
-                    </>
-                  )}
+                  <X className="h-4 w-4" />
                 </button>
               </div>
-            </div>
-          </form>
+            )}
 
 
-          {/* =================================================
-              LIVE PREVIEW
-          ================================================== */}
+            {success && (
+              <div className="notification-alert notification-alert-success">
+                <CheckCircle2 className="h-5 w-5 shrink-0" />
 
-          <aside className="xl:sticky xl:top-24">
-            <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-[0_8px_35px_rgba(15,23,42,0.05)]">
-              <div className="border-b border-slate-100 px-5 py-5 sm:px-6">
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <p className="text-[11px] font-black uppercase tracking-[0.14em] text-orange-600">
-                      Live preview
-                    </p>
+                <span>
+                  {success}
+                </span>
 
-                    <h3 className="mt-1 text-lg font-black text-slate-900">
-                      Student notification
-                    </h3>
-                  </div>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setSuccess("")
+                  }
+                  aria-label="Close success message"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            )}
 
-                  <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-orange-50 text-orange-600">
-                    <Bell className="h-4 w-4" />
-                  </div>
-                </div>
+
+            {/* =============================================
+                COMPOSER HEADER
+            ============================================= */}
+
+            <div className="notifications-section-heading">
+
+              <div>
+                <span className="notifications-section-kicker">
+                  CREATE MESSAGE
+                </span>
+
+                <h2>
+                  Send a new notification
+                </h2>
+
+                <p>
+                  Choose your audience, write your message,
+                  preview it and send it when you're ready.
+                </p>
               </div>
 
-              <div className="bg-gradient-to-b from-slate-50 to-white p-5 sm:p-6">
-                {/* Phone-style notification */}
 
-                <div className="mx-auto max-w-[390px] rounded-[28px] border border-slate-200 bg-slate-950 p-2 shadow-2xl">
-                  <div className="overflow-hidden rounded-[22px] bg-[#f7f8fa]">
-                    {/* Fake status bar */}
+              <button
+                type="button"
+                className="notifications-refresh-button"
+                onClick={() =>
+                  loadData(false)
+                }
+                disabled={refreshing}
+              >
+                <RefreshCw
+                  className={`h-4 w-4 ${
+                    refreshing
+                      ? "animate-spin"
+                      : ""
+                  }`}
+                />
 
-                    <div className="flex items-center justify-between bg-white px-5 py-3 text-[10px] font-bold text-slate-500">
+                Refresh
+              </button>
+
+            </div>
+
+
+            {/* =============================================
+                COMPOSER
+            ============================================= */}
+
+            <form
+              onSubmit={handleSubmit}
+              className="notifications-composer-grid"
+            >
+
+              {/* LEFT SIDE */}
+
+              <div className="notifications-composer-main">
+
+                {/* AUDIENCE */}
+
+                <section className="notification-form-card">
+
+                  <div className="notification-card-heading">
+                    <div className="notification-card-number">
+                      01
+                    </div>
+
+                    <div>
+                      <h3>
+                        Choose your audience
+                      </h3>
+
+                      <p>
+                        Decide who should receive this message.
+                      </p>
+                    </div>
+                  </div>
+
+
+                  <div className="audience-grid">
+
+                    {AUDIENCES.map(
+                      (item) => {
+                        const Icon =
+                          item.icon;
+
+                        const active =
+                          audience ===
+                          item.id;
+
+                        return (
+                          <button
+                            type="button"
+                            key={item.id}
+                            onClick={() =>
+                              handleAudienceChange(
+                                item.id
+                              )
+                            }
+                            className={`audience-card ${
+                              active
+                                ? "active"
+                                : ""
+                            }`}
+                          >
+                            <div className="audience-card-top">
+
+                              <div
+                                className={`audience-icon ${item.tone}`}
+                              >
+                                <Icon className="h-5 w-5" />
+                              </div>
+
+                              <span
+                                className={`audience-radio ${
+                                  active
+                                    ? "active"
+                                    : ""
+                                }`}
+                              >
+                                {active && (
+                                  <Check className="h-3 w-3" />
+                                )}
+                              </span>
+
+                            </div>
+
+
+                            <strong>
+                              {item.title}
+                            </strong>
+
+                            <p>
+                              {item.description}
+                            </p>
+                          </button>
+                        );
+                      }
+                    )}
+
+                  </div>
+
+
+                  {/* SELECTED STUDENTS */}
+
+                  {audience ===
+                    "selected" && (
+                    <div className="selected-students-panel">
+
+                      <div className="selected-students-header">
+
+                        <div>
+                          <strong>
+                            Select students
+                          </strong>
+
+                          <span>
+                            {selectedCount} selected
+                          </span>
+                        </div>
+
+
+                        <div className="selected-students-actions">
+
+                          <button
+                            type="button"
+                            onClick={
+                              selectAllVisibleStudents
+                            }
+                          >
+                            Select visible
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={
+                              clearSelectedStudents
+                            }
+                          >
+                            Clear
+                          </button>
+
+                        </div>
+
+                      </div>
+
+
+                      <div className="student-search">
+                        <Search className="h-4 w-4" />
+
+                        <input
+                          type="text"
+                          value={
+                            studentSearch
+                          }
+                          onChange={(event) =>
+                            setStudentSearch(
+                              event.target.value
+                            )
+                          }
+                          placeholder="Search by student name, phone or seat..."
+                        />
+                      </div>
+
+
+                      <div className="student-selection-list">
+
+                        {filteredStudents.length ===
+                        0 ? (
+                          <div className="student-selection-empty">
+                            <Users className="h-6 w-6" />
+
+                            <span>
+                              No active students found.
+                            </span>
+                          </div>
+                        ) : (
+                          filteredStudents.map(
+                            (student) => {
+                              const selected =
+                                selectedStudentIds.includes(
+                                  student._id
+                                );
+
+                              return (
+                                <button
+                                  type="button"
+                                  key={
+                                    student._id
+                                  }
+                                  className={`student-selection-row ${
+                                    selected
+                                      ? "selected"
+                                      : ""
+                                  }`}
+                                  onClick={() =>
+                                    toggleStudent(
+                                      student._id
+                                    )
+                                  }
+                                >
+
+                                  <div className="student-avatar">
+                                    {getInitials(
+                                      student.name
+                                    )}
+                                  </div>
+
+
+                                  <div className="student-selection-info">
+                                    <strong>
+                                      {
+                                        student.name
+                                      }
+                                    </strong>
+
+                                    <span>
+                                      {student.phoneNumber}
+                                      {student.seatNumber
+                                        ? ` • Seat ${student.seatNumber}`
+                                        : ""}
+                                    </span>
+                                  </div>
+
+
+                                  <div
+                                    className={`student-selection-check ${
+                                      selected
+                                        ? "selected"
+                                        : ""
+                                    }`}
+                                  >
+                                    {selected && (
+                                      <Check className="h-3.5 w-3.5" />
+                                    )}
+                                  </div>
+
+                                </button>
+                              );
+                            }
+                          )
+                        )}
+
+                      </div>
+
+                    </div>
+                  )}
+
+                </section>
+
+
+                {/* TYPE */}
+
+                <section className="notification-form-card">
+
+                  <div className="notification-card-heading">
+                    <div className="notification-card-number">
+                      02
+                    </div>
+
+                    <div>
+                      <h3>
+                        What would you like to send?
+                      </h3>
+
+                      <p>
+                        Choose the purpose of your notification.
+                      </p>
+                    </div>
+                  </div>
+
+
+                  <div className="type-grid">
+
+                    {NOTIFICATION_TYPES.map(
+                      (item) => {
+                        const Icon =
+                          item.icon;
+
+                        const active =
+                          type ===
+                          item.id;
+
+                        return (
+                          <button
+                            type="button"
+                            key={item.id}
+                            onClick={() =>
+                              handleTypeChange(
+                                item.id
+                              )
+                            }
+                            className={`type-card ${
+                              active
+                                ? "active"
+                                : ""
+                            }`}
+                          >
+
+                            <div
+                              className={`type-icon ${item.tone}`}
+                            >
+                              <Icon className="h-5 w-5" />
+                            </div>
+
+                            <div>
+                              <strong>
+                                {item.title}
+                              </strong>
+
+                              <p>
+                                {item.description}
+                              </p>
+                            </div>
+
+                            <span
+                              className={`type-radio ${
+                                active
+                                  ? "active"
+                                  : ""
+                              }`}
+                            >
+                              {active && (
+                                <Check className="h-3 w-3" />
+                              )}
+                            </span>
+
+                          </button>
+                        );
+                      }
+                    )}
+
+                  </div>
+
+
+                  {/* FEE PERIOD */}
+
+                  {type ===
+                    "fee_reminder" && (
+                    <div className="fee-period-box">
+
+                      <div>
+                        <strong>
+                          Fee period
+                        </strong>
+
+                        <p>
+                          Select the month this reminder is about.
+                        </p>
+                      </div>
+
+
+                      <div className="fee-period-fields">
+
+                        <label>
+                          <span>
+                            Month
+                          </span>
+
+                          <div className="select-wrapper">
+                            <select
+                              value={
+                                month
+                              }
+                              onChange={(event) =>
+                                setMonth(
+                                  Number(
+                                    event.target.value
+                                  )
+                                )
+                              }
+                            >
+                              {MONTHS.map(
+                                (
+                                  monthName,
+                                  index
+                                ) => (
+                                  <option
+                                    value={
+                                      index + 1
+                                    }
+                                    key={
+                                      monthName
+                                    }
+                                  >
+                                    {
+                                      monthName
+                                    }
+                                  </option>
+                                )
+                              )}
+                            </select>
+
+                            <ChevronDown className="h-4 w-4" />
+                          </div>
+                        </label>
+
+
+                        <label>
+                          <span>
+                            Year
+                          </span>
+
+                          <div className="select-wrapper">
+                            <select
+                              value={
+                                year
+                              }
+                              onChange={(event) =>
+                                setYear(
+                                  Number(
+                                    event.target.value
+                                  )
+                                )
+                              }
+                            >
+                              {[
+                                getCurrentYear() - 1,
+                                getCurrentYear(),
+                                getCurrentYear() + 1
+                              ].map(
+                                (
+                                  yearValue
+                                ) => (
+                                  <option
+                                    value={
+                                      yearValue
+                                    }
+                                    key={
+                                      yearValue
+                                    }
+                                  >
+                                    {
+                                      yearValue
+                                    }
+                                  </option>
+                                )
+                              )}
+                            </select>
+
+                            <ChevronDown className="h-4 w-4" />
+                          </div>
+                        </label>
+
+                      </div>
+
+                    </div>
+                  )}
+
+                </section>
+
+
+                {/* MESSAGE */}
+
+                <section className="notification-form-card">
+
+                  <div className="notification-card-heading">
+                    <div className="notification-card-number">
+                      03
+                    </div>
+
+                    <div>
+                      <h3>
+                        Write your message
+                      </h3>
+
+                      <p>
+                        Keep the message short, clear and student friendly.
+                      </p>
+                    </div>
+                  </div>
+
+
+                  <div className="notification-fields">
+
+                    <label className="notification-field">
+                      <div className="notification-field-label">
+                        <span>
+                          Notification title
+                        </span>
+
+                        <small>
+                          {title.length}/80
+                        </small>
+                      </div>
+
+                      <input
+                        type="text"
+                        maxLength={80}
+                        value={title}
+                        onChange={(event) =>
+                          setTitle(
+                            event.target.value
+                          )
+                        }
+                        placeholder="Enter notification title"
+                      />
+                    </label>
+
+
+                    <label className="notification-field">
+                      <div className="notification-field-label">
+                        <span>
+                          Message
+                        </span>
+
+                        <small>
+                          {message.length}/500
+                        </small>
+                      </div>
+
+                      <textarea
+                        rows={6}
+                        maxLength={500}
+                        value={message}
+                        onChange={(event) =>
+                          setMessage(
+                            event.target.value
+                          )
+                        }
+                        placeholder="Write your notification..."
+                      />
+                    </label>
+
+                  </div>
+
+                </section>
+
+
+                {/* SEND */}
+
+                <div className="notification-submit-area">
+
+                  <div className="notification-submit-info">
+                    <div className="notification-submit-icon">
+                      <Send className="h-5 w-5" />
+                    </div>
+
+                    <div>
+                      <strong>
+                        Ready to send?
+                      </strong>
+
+                      <span>
+                        This notification will be sent through your configured Firebase notification system.
+                      </span>
+                    </div>
+                  </div>
+
+
+                  <button
+                    type="submit"
+                    disabled={
+                      sending
+                    }
+                    className="notification-send-button"
+                  >
+                    {sending ? (
+                      <>
+                        <Loader2 className="h-5 w-5 animate-spin" />
+
+                        Sending...
+                      </>
+                    ) : (
+                      <>
+                        Send notification
+
+                        <ArrowRight className="h-5 w-5" />
+                      </>
+                    )}
+                  </button>
+
+                </div>
+
+              </div>
+
+
+              {/* RIGHT SIDE PREVIEW */}
+
+              <aside className="notifications-composer-sidebar">
+
+                <div className="notification-preview-card">
+
+                  <div className="notification-preview-heading">
+
+                    <div>
+                      <span>
+                        LIVE PREVIEW
+                      </span>
+
+                      <h3>
+                        Student notification
+                      </h3>
+                    </div>
+
+                    <div className="preview-live-dot">
+                      <span />
+                      Live
+                    </div>
+
+                  </div>
+
+
+                  <div className="phone-preview">
+
+                    <div className="phone-preview-top">
                       <span>
                         9:41
                       </span>
 
+                      <div>
+                        <span />
+                        <span />
+                        <span />
+                      </div>
+                    </div>
+
+
+                    <div className="phone-preview-brand">
+                      <div className="phone-preview-brand-icon">
+                        <Sparkles className="h-4 w-4" />
+                      </div>
+
+                      <div>
+                        <strong>
+                          Shri Krishna
+                        </strong>
+
+                        <span>
+                          Digital Library
+                        </span>
+                      </div>
+                    </div>
+
+
+                    <div className="phone-preview-notification">
+
+                      <div className="phone-preview-notification-top">
+
+                        <div className="phone-preview-notification-app">
+                          <Bell className="h-3.5 w-3.5" />
+                        </div>
+
+                        <span>
+                          NOW
+                        </span>
+
+                      </div>
+
+
+                      <h4>
+                        {title ||
+                          "Notification title"}
+                      </h4>
+
+                      <p>
+                        {message ||
+                          "Your notification message will appear here."}
+                      </p>
+
+                    </div>
+
+
+                    <div className="phone-preview-home-indicator" />
+
+                  </div>
+
+
+                  <div className="preview-details">
+
+                    <div className="preview-detail-row">
                       <span>
-                        Shri Krishna Library
+                        Audience
                       </span>
+
+                      <strong>
+                        <AudienceIcon className="h-3.5 w-3.5" />
+
+                        {audience ===
+                        "selected"
+                          ? `${selectedCount} selected`
+                          : selectedAudience.title}
+                      </strong>
                     </div>
 
-                    <div className="p-4 sm:p-5">
-                      <div className="mb-4 flex items-center gap-2">
-                        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-orange-500 text-white">
-                          <Bell className="h-4 w-4" />
-                        </div>
 
-                        <div>
-                          <p className="text-[11px] font-black text-slate-900">
-                            Shri Krishna Digital Library
-                          </p>
+                    <div className="preview-detail-row">
+                      <span>
+                        Type
+                      </span>
 
-                          <p className="text-[9px] font-semibold text-slate-400">
-                            Just now
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                        <div className="flex items-start gap-3">
-                          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-orange-50 text-orange-600">
-                            <PreviewIcon className="h-5 w-5" />
-                          </div>
-
-                          <div className="min-w-0 flex-1">
-                            <p className="text-sm font-black text-slate-900">
-                              {title.trim() ||
-                                "Your notification title"}
-                            </p>
-
-                            <p className="mt-1.5 text-xs leading-5 text-slate-500">
-                              {message.trim() ||
-                                "Your notification message will appear here."}
-                            </p>
-
-                            <div className="mt-3 flex flex-wrap gap-1.5">
-                              <span className="rounded-full bg-orange-50 px-2 py-1 text-[9px] font-bold text-orange-700">
-                                {formatNotificationType(
-                                  type
-                                )}
-                              </span>
-
-                              <span className="rounded-full bg-slate-100 px-2 py-1 text-[9px] font-bold text-slate-600">
-                                {formatAudience(
-                                  audience
-                                )}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
+                      <strong>
+                        {selectedType.title}
+                      </strong>
                     </div>
+
+
+                    {type ===
+                      "fee_reminder" && (
+                      <div className="preview-detail-row">
+                        <span>
+                          Fee period
+                        </span>
+
+                        <strong>
+                          {
+                            MONTHS[
+                              Number(
+                                month
+                              ) - 1
+                            ]
+                          }{" "}
+                          {year}
+                        </strong>
+                      </div>
+                    )}
+
                   </div>
+
                 </div>
 
 
-                {/* Preview details */}
+                {/* QUICK INFO */}
 
-                <div className="mt-5 grid gap-3">
-                  <div className="rounded-xl border border-slate-200 bg-white p-4">
-                    <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">
-                      Audience
-                    </p>
+                <div className="notification-tip-card">
 
-                    <div className="mt-2 flex items-center gap-2">
-                      {selectedAudience?.icon && (
-                        <selectedAudience.icon className="h-4 w-4 text-orange-600" />
-                      )}
-
-                      <p className="text-sm font-bold text-slate-800">
-                        {selectedAudience?.title ||
-                          "Audience"}
-                      </p>
-                    </div>
+                  <div className="notification-tip-icon">
+                    <MessageSquare className="h-5 w-5" />
                   </div>
 
-                  <div className="rounded-xl border border-slate-200 bg-white p-4">
-                    <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">
-                      Delivery
-                    </p>
+                  <div>
+                    <span>
+                      MESSAGE TIP
+                    </span>
 
-                    <p className="mt-2 text-sm font-bold text-slate-800">
-                      Manual push notification
+                    <strong>
+                      Keep it simple.
+                    </strong>
+
+                    <p>
+                      A clear title and short message
+                      make notifications easier for students
+                      to understand quickly.
                     </p>
                   </div>
 
-                  {type ===
-                    "fee_reminder" && (
-                    <div className="rounded-xl border border-orange-100 bg-orange-50 p-4">
-                      <p className="text-[10px] font-black uppercase tracking-wider text-orange-500">
-                        Fee period
-                      </p>
-
-                      <p className="mt-2 text-sm font-bold text-orange-900">
-                        {
-                          MONTHS.find(
-                            (item) =>
-                              item.value ===
-                              Number(month)
-                          )?.label
-                        }{" "}
-                        {year}
-                      </p>
-                    </div>
-                  )}
                 </div>
-              </div>
-            </div>
-          </aside>
-        </section>
+
+              </aside>
+
+            </form>
 
 
-        {/* ===================================================
-            NOTIFICATION HISTORY
-        ==================================================== */}
+            {/* =============================================
+                HISTORY
+            ============================================= */}
 
-        <section className="mt-8 overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-[0_8px_35px_rgba(15,23,42,0.05)]">
-          <div className="border-b border-slate-100 px-5 py-6 sm:px-7">
-            <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
-              <SectionHeading
-                eyebrow="Activity"
-                title="Notification history"
-                description="Review notifications sent from the admin panel and monitor delivery status."
-                icon={Clock3}
-              />
+            <section className="notification-history-section">
 
-              <div className="flex w-full flex-col gap-2 sm:flex-row lg:mb-6 lg:w-auto">
-                <div className="relative min-w-0 flex-1 sm:min-w-[250px]">
-                  <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <div className="notifications-section-heading history-heading">
 
-                  <input
-                    type="search"
-                    value={
-                      historySearch
-                    }
-                    onChange={(event) =>
-                      setHistorySearch(
-                        event.target.value
+                <div>
+                  <span className="notifications-section-kicker">
+                    ACTIVITY
+                  </span>
+
+                  <h2>
+                    Recent notifications
+                  </h2>
+
+                  <p>
+                    Review messages sent from the library communication center.
+                  </p>
+                </div>
+
+
+                <div className="history-heading-actions">
+
+                  <div className="history-search">
+                    <Search className="h-4 w-4" />
+
+                    <input
+                      type="text"
+                      value={
+                        historySearch
+                      }
+                      onChange={(event) =>
+                        setHistorySearch(
+                          event.target.value
+                        )
+                      }
+                      placeholder="Search history..."
+                    />
+                  </div>
+
+
+                  <button
+                    type="button"
+                    className="history-mobile-toggle"
+                    onClick={() =>
+                      setMobileHistoryOpen(
+                        (current) =>
+                          !current
                       )
                     }
-                    placeholder="Search notifications..."
-                    className="h-11 w-full rounded-xl border border-slate-200 bg-white pl-10 pr-4 text-sm outline-none transition focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10"
-                  />
+                  >
+                    <History className="h-4 w-4" />
+
+                    {mobileHistoryOpen
+                      ? "Hide history"
+                      : "View history"}
+                  </button>
+
                 </div>
 
-                <CustomSelect
-                  value={
-                    historyFilter
-                  }
-                  onChange={(event) =>
-                    setHistoryFilter(
-                      event.target.value
-                    )
-                  }
-                >
-                  <option value="all">
-                    All statuses
-                  </option>
-
-                  <option value="sent">
-                    Delivered
-                  </option>
-
-                  <option value="failed">
-                    Failed
-                  </option>
-
-                  <option value="queued">
-                    Queued
-                  </option>
-                </CustomSelect>
               </div>
-            </div>
-          </div>
 
 
-          {/* =================================================
-              HISTORY LOADING
-          ================================================== */}
+              <div
+                className={`notification-history-card ${
+                  mobileHistoryOpen
+                    ? "mobile-open"
+                    : ""
+                }`}
+              >
 
-          {loading ? (
-            <div className="grid gap-4 p-5 sm:p-7 md:grid-cols-2 xl:grid-cols-3">
-              {[1, 2, 3].map(
-                (item) => (
-                  <div
-                    key={item}
-                    className="animate-pulse rounded-2xl border border-slate-100 p-5"
-                  >
-                    <div className="h-4 w-32 rounded bg-slate-100" />
+                {filteredHistory.length ===
+                0 ? (
+                  <div className="notification-history-empty">
+                    <div>
+                      <Bell className="h-7 w-7" />
+                    </div>
 
-                    <div className="mt-4 h-5 w-3/4 rounded bg-slate-100" />
+                    <h3>
+                      No notifications yet
+                    </h3>
 
-                    <div className="mt-3 h-12 w-full rounded bg-slate-100" />
-
-                    <div className="mt-5 h-4 w-24 rounded bg-slate-100" />
+                    <p>
+                      Once you send a notification,
+                      its activity will appear here.
+                    </p>
                   </div>
-                )
-              )}
-            </div>
-          ) : filteredNotifications.length ===
-            0 ? (
-            <div className="px-5 py-16 text-center sm:px-7">
-              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-slate-100 text-slate-400">
-                <Bell className="h-7 w-7" />
-              </div>
+                ) : (
+                  <>
+                    {/* DESKTOP TABLE */}
 
-              <h3 className="mt-5 text-base font-black text-slate-800">
-                No notifications found
-              </h3>
+                    <div className="notification-history-table-wrapper">
+                      <table className="notification-history-table">
+                        <thead>
+                          <tr>
+                            <th>
+                              Notification
+                            </th>
 
-              <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-slate-500">
-                Notifications you send from the
-                communication center will appear here.
-              </p>
-            </div>
-          ) : (
-            <>
-              {/* ---------------------------------------------
-                  MOBILE / TABLET CARDS
-              ---------------------------------------------- */}
-
-              <div className="grid gap-4 p-5 sm:p-7 md:grid-cols-2 xl:hidden">
-                {filteredNotifications.map(
-                  (notification) => {
-                    const statusConfig =
-                      getStatusConfig(
-                        notification.status
-                      );
-
-                    const StatusIcon =
-                      statusConfig.icon;
-
-                    return (
-                      <div
-                        key={
-                          notification._id
-                        }
-                        className="rounded-2xl border border-slate-200 bg-white p-5 transition hover:border-orange-200 hover:shadow-md"
-                      >
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="flex min-w-0 items-center gap-3">
-                            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-orange-50 text-orange-600">
-                              <Bell className="h-4 w-4" />
-                            </div>
-
-                            <div className="min-w-0">
-                              <p className="truncate text-sm font-black text-slate-900">
-                                {notification.title ||
-                                  "Notification"}
-                              </p>
-
-                              <p className="mt-0.5 text-xs text-slate-400">
-                                {formatDateTime(
-                                  notification.createdAt
-                                )}
-                              </p>
-                            </div>
-                          </div>
-
-                          <span
-                            className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-2.5 py-1 text-[10px] font-bold ${statusConfig.className}`}
-                          >
-                            <StatusIcon className="h-3 w-3" />
-
-                            {
-                              statusConfig.label
-                            }
-                          </span>
-                        </div>
-
-                        <p className="mt-4 line-clamp-3 text-sm leading-6 text-slate-500">
-                          {notification.message ||
-                            "No message"}
-                        </p>
-
-                        <div className="mt-5 grid grid-cols-2 gap-3 border-t border-slate-100 pt-4">
-                          <div>
-                            <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">
-                              Type
-                            </p>
-
-                            <p className="mt-1 text-xs font-bold text-slate-700">
-                              {formatNotificationType(
-                                notification.type
-                              )}
-                            </p>
-                          </div>
-
-                          <div>
-                            <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">
+                            <th>
                               Audience
-                            </p>
+                            </th>
 
-                            <p className="mt-1 text-xs font-bold text-slate-700">
-                              {formatAudience(
-                                notification.audience
-                              )}
-                            </p>
-                          </div>
-                        </div>
+                            <th>
+                              Type
+                            </th>
 
-                        {(notification.month ||
-                          notification.year) && (
-                          <div className="mt-3 rounded-xl bg-slate-50 px-3 py-2.5">
-                            <p className="text-xs font-semibold text-slate-500">
-                              Fee period:{" "}
-                              <span className="font-black text-slate-700">
-                                {notification.month
-                                  ? MONTHS.find(
-                                      (
-                                        item
-                                      ) =>
-                                        item.value ===
-                                        Number(
-                                          notification.month
-                                        )
-                                    )?.label
-                                  : "—"}{" "}
-                                {notification.year ||
-                                  ""}
-                              </span>
-                            </p>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  }
-                )}
-              </div>
+                            <th>
+                              Status
+                            </th>
 
-
-              {/* ---------------------------------------------
-                  DESKTOP TABLE
-              ---------------------------------------------- */}
-
-              <div className="hidden overflow-x-auto xl:block">
-                <table className="w-full min-w-[900px]">
-                  <thead>
-                    <tr className="border-b border-slate-100 bg-slate-50/70">
-                      <th className="px-7 py-4 text-left text-[10px] font-black uppercase tracking-[0.12em] text-slate-400">
-                        Notification
-                      </th>
-
-                      <th className="px-5 py-4 text-left text-[10px] font-black uppercase tracking-[0.12em] text-slate-400">
-                        Type
-                      </th>
-
-                      <th className="px-5 py-4 text-left text-[10px] font-black uppercase tracking-[0.12em] text-slate-400">
-                        Audience
-                      </th>
-
-                      <th className="px-5 py-4 text-left text-[10px] font-black uppercase tracking-[0.12em] text-slate-400">
-                        Date
-                      </th>
-
-                      <th className="px-5 py-4 text-right text-[10px] font-black uppercase tracking-[0.12em] text-slate-400">
-                        Status
-                      </th>
-                    </tr>
-                  </thead>
-
-                  <tbody className="divide-y divide-slate-100">
-                    {filteredNotifications.map(
-                      (notification) => {
-                        const statusConfig =
-                          getStatusConfig(
-                            notification.status
-                          );
-
-                        const StatusIcon =
-                          statusConfig.icon;
-
-                        return (
-                          <tr
-                            key={
-                              notification._id
-                            }
-                            className="group transition hover:bg-orange-50/30"
-                          >
-                            <td className="max-w-[440px] px-7 py-5">
-                              <div className="flex items-start gap-3">
-                                <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-orange-50 text-orange-600">
-                                  <Bell className="h-4 w-4" />
-                                </div>
-
-                                <div className="min-w-0">
-                                  <p className="truncate text-sm font-black text-slate-900">
-                                    {notification.title ||
-                                      "Notification"}
-                                  </p>
-
-                                  <p className="mt-1 line-clamp-2 text-xs leading-5 text-slate-500">
-                                    {notification.message ||
-                                      "No message"}
-                                  </p>
-                                </div>
-                              </div>
-                            </td>
-
-                            <td className="px-5 py-5">
-                              <span className="inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-bold text-slate-600">
-                                {formatNotificationType(
-                                  notification.type
-                                )}
-                              </span>
-                            </td>
-
-                            <td className="px-5 py-5">
-                              <p className="text-xs font-bold text-slate-700">
-                                {formatAudience(
-                                  notification.audience
-                                )}
-                              </p>
-
-                              {(notification.month ||
-                                notification.year) && (
-                                <p className="mt-1 text-[10px] text-slate-400">
-                                  {notification.month
-                                    ? MONTHS.find(
-                                        (
-                                          item
-                                        ) =>
-                                          item.value ===
-                                          Number(
-                                            notification.month
-                                          )
-                                      )?.label
-                                    : "—"}{" "}
-                                  {notification.year ||
-                                    ""}
-                                </p>
-                              )}
-                            </td>
-
-                            <td className="whitespace-nowrap px-5 py-5">
-                              <p className="text-xs font-bold text-slate-700">
-                                {formatDate(
-                                  notification.createdAt
-                                )}
-                              </p>
-
-                              <p className="mt-1 text-[10px] text-slate-400">
-                                {new Date(
-                                  notification.createdAt ||
-                                    Date.now()
-                                ).toLocaleTimeString(
-                                  "en-IN",
-                                  {
-                                    hour: "2-digit",
-                                    minute:
-                                      "2-digit"
-                                  }
-                                )}
-                              </p>
-                            </td>
-
-                            <td className="px-5 py-5 text-right">
-                              <span
-                                className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[10px] font-bold ${statusConfig.className}`}
-                              >
-                                <StatusIcon className="h-3 w-3" />
-
-                                {
-                                  statusConfig.label
-                                }
-                              </span>
-                            </td>
+                            <th>
+                              Date
+                            </th>
                           </tr>
-                        );
-                      }
-                    )}
-                  </tbody>
-                </table>
+                        </thead>
+
+                        <tbody>
+                          {filteredHistory
+                            .slice(
+                              0,
+                              20
+                            )
+                            .map(
+                              (
+                                notification,
+                                index
+                              ) => {
+                                const status =
+                                  getStatusInfo(
+                                    notification
+                                  );
+
+                                const StatusIcon =
+                                  status.icon;
+
+                                return (
+                                  <tr
+                                    key={
+                                      notification._id ||
+                                      notification.id ||
+                                      index
+                                    }
+                                  >
+
+                                    <td>
+                                      <div className="history-message-cell">
+
+                                        <div className="history-message-icon">
+                                          <Bell className="h-4 w-4" />
+                                        </div>
+
+                                        <div>
+                                          <strong>
+                                            {
+                                              notification.title ||
+                                              "Notification"
+                                            }
+                                          </strong>
+
+                                          <span>
+                                            {
+                                              notification.message ||
+                                              "—"
+                                            }
+                                          </span>
+                                        </div>
+
+                                      </div>
+                                    </td>
+
+
+                                    <td>
+                                      <span className="history-audience">
+                                        {notification.audience ===
+                                        "selected"
+                                          ? "Selected students"
+                                          : notification.audience ===
+                                            "unpaid"
+                                          ? "Unpaid students"
+                                          : "All active students"}
+                                      </span>
+                                    </td>
+
+
+                                    <td>
+                                      <span className="history-type">
+                                        {notification.type ===
+                                        "fee_reminder"
+                                          ? "Fee reminder"
+                                          : "Announcement"}
+                                      </span>
+                                    </td>
+
+
+                                    <td>
+                                      <span
+                                        className={
+                                          status.className
+                                        }
+                                      >
+                                        <StatusIcon className="h-3.5 w-3.5" />
+
+                                        {
+                                          status.label
+                                        }
+                                      </span>
+                                    </td>
+
+
+                                    <td>
+                                      <span className="history-date">
+                                        {formatDateTime(
+                                          getNotificationDate(
+                                            notification
+                                          )
+                                        )}
+                                      </span>
+                                    </td>
+
+                                  </tr>
+                                );
+                              }
+                            )}
+                        </tbody>
+                      </table>
+                    </div>
+
+
+                    {/* MOBILE CARDS */}
+
+                    <div className="notification-history-mobile">
+                      {filteredHistory
+                        .slice(
+                          0,
+                          20
+                        )
+                        .map(
+                          (
+                            notification,
+                            index
+                          ) => {
+                            const status =
+                              getStatusInfo(
+                                notification
+                              );
+
+                            const StatusIcon =
+                              status.icon;
+
+                            return (
+                              <div
+                                className="history-mobile-card"
+                                key={
+                                  notification._id ||
+                                  notification.id ||
+                                  index
+                                }
+                              >
+
+                                <div className="history-mobile-top">
+
+                                  <div className="history-mobile-icon">
+                                    <Bell className="h-4 w-4" />
+                                  </div>
+
+                                  <span
+                                    className={
+                                      status.className
+                                    }
+                                  >
+                                    <StatusIcon className="h-3.5 w-3.5" />
+
+                                    {
+                                      status.label
+                                    }
+                                  </span>
+
+                                </div>
+
+
+                                <h3>
+                                  {
+                                    notification.title ||
+                                    "Notification"
+                                  }
+                                </h3>
+
+
+                                <p>
+                                  {
+                                    notification.message ||
+                                    "—"
+                                  }
+                                </p>
+
+
+                                <div className="history-mobile-meta">
+
+                                  <span>
+                                    {notification.audience ===
+                                    "selected"
+                                      ? "Selected students"
+                                      : notification.audience ===
+                                        "unpaid"
+                                      ? "Unpaid students"
+                                      : "All active students"}
+                                  </span>
+
+                                  <span>
+                                    {notification.type ===
+                                    "fee_reminder"
+                                      ? "Fee reminder"
+                                      : "Announcement"}
+                                  </span>
+
+                                  <span>
+                                    {formatDate(
+                                      getNotificationDate(
+                                        notification
+                                      )
+                                    )}
+                                  </span>
+
+                                </div>
+
+                              </div>
+                            );
+                          }
+                        )}
+                    </div>
+                  </>
+                )}
+
               </div>
-            </>
-          )}
+
+            </section>
+
+          </div>
         </section>
 
+      </main>
 
-        {/* ===================================================
-            FOOTER NOTE
-        ==================================================== */}
 
-        <div className="mt-6 flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-4 text-xs text-slate-500 shadow-sm sm:flex-row sm:items-center sm:justify-between sm:px-5">
-          <div className="flex items-start gap-2">
-            <Info className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" />
+      {/* ===================================================
+          FOOTER
+      =================================================== */}
 
-            <p className="leading-5">
-              Notifications are controlled manually by
-              the library operator. No automatic fee
-              reminders are triggered from this page.
-            </p>
+      <footer className="notifications-footer">
+        <div className="notifications-container">
+
+          <div>
+            <strong>
+              SHRI KRISHNA DIGITAL LIBRARY
+            </strong>
+
+            <span>
+              Built for focused learning.
+            </span>
           </div>
 
-          <Link
-            to="/admin/dashboard"
-            className="inline-flex shrink-0 items-center gap-1.5 font-bold text-orange-600 transition hover:text-orange-700"
-          >
-            Back to dashboard
-            <ArrowLeft className="h-3.5 w-3.5 rotate-180" />
-          </Link>
+          <span>
+            Communication Center
+          </span>
+
         </div>
-      </main>
+      </footer>
+
     </div>
   );
 }
